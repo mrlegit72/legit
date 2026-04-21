@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0F0F0F;
+  color: #F5F5F5;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: #D4A017;
+  color: #0A0A0A;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0F0F0F;
+}
+::-webkit-scrollbar-thumb {
+  background: #2F2F2F;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #D4A017;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-ink-900 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-gold {
+    @apply btn bg-gold text-ink-950 hover:bg-gold-400 hover:shadow-gold-lg focus:ring-gold;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-ink-50 border border-ink-600 hover:border-gold hover:text-gold;
+  }
+  .btn-dark {
+    @apply btn bg-ink-800 text-ink-50 border border-ink-700 hover:border-gold/40 hover:bg-ink-700;
+  }
+  .card {
+    @apply rounded-2xl bg-ink-800 border border-ink-700;
+  }
+  .input {
+    @apply w-full rounded-xl bg-ink-900 border border-ink-700 px-4 py-3 text-ink-50 placeholder:text-ink-400 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold transition;
+  }
+  .label {
+    @apply block text-sm font-medium text-ink-200 mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+  .badge-active {
+    @apply badge bg-emerald-500/10 text-emerald-400 border border-emerald-500/20;
+  }
+  .badge-pending {
+    @apply badge bg-gold/10 text-gold border border-gold/20;
+  }
+  .badge-completed {
+    @apply badge bg-ink-700 text-ink-200 border border-ink-600;
+  }
+  .badge-failed {
+    @apply badge bg-red-500/10 text-red-400 border border-red-500/20;
+  }
+}
+
+.gold-text {
+  background: linear-gradient(135deg, #F1D682 0%, #D4A017 40%, #F1D682 80%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.noise-bg {
+  background-image:
+    radial-gradient(circle at 25% 10%, rgba(212,160,23,0.18), transparent 45%),
+    radial-gradient(circle at 80% 90%, rgba(16,185,129,0.08), transparent 50%);
+}
+
+.grid-bg {
+  background-image: linear-gradient(rgba(212,160,23,0.05) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(212,160,23,0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.glow {
+  box-shadow: 0 0 60px -10px rgba(212, 160, 23, 0.4);
+}
