@@ -1,0 +1,19 @@
+# Scenarios are correlation buckets. Several markets can resolve together
+# under the same world-state, so we cap aggregate exposure per scenario
+# to avoid stacking 3 highly-correlated longs as if they were independent.
+scenarios:
+  - id: iran_de_escalation
+    description: "Outcomes that pay off if Iran-US/Israel tension cools"
+    markets:
+      - us-x-iran-permanent-peace-deal
+      - iran-x-israelus-conflict-ends
+      - trump-end-ops-iran
+      - strait-of-hormuz-traffic
+    max_exposure_pct: 0.10        # max 10% of bankroll across all of them combined
+
+  - id: iran_escalation
+    description: "Outcomes that pay off if conflict deepens / regime weakens"
+    markets:
+      - kharg-island-control
+      - iranian-regime-fall
+    max_exposure_pct: 0.08

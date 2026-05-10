@@ -3,9 +3,12 @@
 Pipeline:
 1. Pre-filter (substring) — done by caller.
 2. Build a structured prompt with markets, current YES prices, and corroboration.
-3. Call Claude (Opus by default; Haiku for cheap pre-classification when enabled).
-4. Parse strict JSON; on parse failure, retry once with a "fix the JSON" follow-up.
-5. Apply post-hoc guards (edge floor, confidence floor, market_id whitelist).
+3. Call Claude with prompt caching on the static parts (system prompt + market list).
+4. Parse strict JSON; fail closed on bad JSON.
+5. Apply post-hoc guards (market_id whitelist, edge floor handled in risk layer).
+
+Prompt caching reference:
+https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 """
 from __future__ import annotations
 
@@ -47,24 +50,33 @@ class ClaudeAnalyst:
                 "timeframe_days": m.timeframe_days,
             })
 
-        user_payload = {
-            "event": {
-                "text": event.text,
-                "source_kind": event.source_kind,
-                "source_handle": event.source_handle,
-                "language": event.language,
-                "credibility": round(event.credibility, 2),
-                "url": event.url,
-            },
-            "markets": market_blobs,
-            "recent_context": [
-                {"source": e.source_handle, "text": e.text[:280], "credibility": round(e.credibility, 2)}
-                for e in corroborating[:5]
-            ],
+        # Two-block user message: cached static market list, fresh event payload.
+        cached_block = {
+            "type": "text",
+            "text": "MARKETS:\n" + json.dumps(market_blobs, ensure_ascii=False),
+            "cache_control": {"type": "ephemeral"},
+        }
+        live_block = {
+            "type": "text",
+            "text": "EVENT:\n" + json.dumps({
+                "event": {
+                    "text": event.text,
+                    "source_kind": event.source_kind,
+                    "source_handle": event.source_handle,
+                    "language": event.language,
+                    "credibility": round(event.credibility, 2),
+                    "url": event.url,
+                },
+                "recent_context": [
+                    {"source": e.source_handle, "text": e.text[:280],
+                     "credibility": round(e.credibility, 2)}
+                    for e in corroborating[:5]
+                ],
+            }, ensure_ascii=False),
         }
 
         try:
-            raw = await self._call_with_retry(json.dumps(user_payload, ensure_ascii=False))
+            raw = await self._call_with_retry([cached_block, live_block])
         except RetryError as exc:
             logger.warning("claude_call_failed", error=str(exc))
             return AnalystVerdict(summary_en="", is_propaganda_risk=True, signals=[])
@@ -78,7 +90,7 @@ class ClaudeAnalyst:
         )
         return verdict
 
-    async def _call_with_retry(self, user_text: str) -> str:
+    async def _call_with_retry(self, content_blocks: list[dict[str, Any]]) -> str:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(min=1, max=8),
@@ -88,9 +100,14 @@ class ClaudeAnalyst:
                 resp = await self._client.messages.create(
                     model=self.settings.anthropic_model,
                     max_tokens=600,
-                    system=self.system_prompt,
-                    messages=[{"role": "user", "content": user_text}],
+                    system=[{
+                        "type": "text",
+                        "text": self.system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
+                    messages=[{"role": "user", "content": content_blocks}],
                 )
+                _log_cache_usage(resp)
                 return _join_text(resp.content)
         return ""  # unreachable
 
@@ -130,7 +147,6 @@ class ClaudeAnalyst:
 def _join_text(blocks) -> str:
     parts: list[str] = []
     for b in blocks:
-        # Anthropic SDK returns TextBlock objects with `.text`
         text = getattr(b, "text", None)
         if text:
             parts.append(text)
@@ -145,3 +161,18 @@ def _strip_code_fence(text: str) -> str:
     if text.startswith("```"):
         text = _FENCE_RE.sub("", text).strip()
     return text
+
+
+def _log_cache_usage(resp: Any) -> None:
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+        return
+    cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    if cache_read or cache_create:
+        logger.debug(
+            "claude_cache_usage",
+            cache_read=cache_read, cache_create=cache_create,
+            input=getattr(usage, "input_tokens", 0),
+            output=getattr(usage, "output_tokens", 0),
+        )

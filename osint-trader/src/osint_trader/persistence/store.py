@@ -1,4 +1,4 @@
-"""SQLite-backed event/signal/trade store.
+"""SQLite-backed event/signal/trade/position store.
 
 Schema is small on purpose: fast inserts, easy to query for backtest/analytics.
 """
@@ -58,16 +58,31 @@ CREATE TABLE IF NOT EXISTS trades (
     order_id        TEXT,
     error           TEXT,
     intent_json     TEXT NOT NULL,
+    triggered_by_event_id TEXT,
     executed_at     TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at);
+
+CREATE TABLE IF NOT EXISTS settlements (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    market_id               TEXT NOT NULL,
+    side                    TEXT NOT NULL,
+    entry_price             REAL NOT NULL,
+    exit_price              REAL NOT NULL,
+    size_usdc               REAL NOT NULL,
+    pnl_usdc                REAL NOT NULL,
+    reason                  TEXT NOT NULL,
+    triggered_by_event_id   TEXT,
+    settled_at              TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_settlements_settled_at ON settlements(settled_at);
 """
 
 
 class Store:
     def __init__(self, path: str | Path = "osint_trader.db") -> None:
-        # Accept SQLAlchemy-style URL or plain path.
         if isinstance(path, str) and path.startswith("sqlite"):
             path = path.split("///", 1)[-1]
         self.path = str(path)
@@ -85,7 +100,6 @@ class Store:
                 return (await cur.fetchone()) is not None
 
     async def save_event(self, event: NewsEvent) -> bool:
-        """Insert if new. Return True on insert, False if duplicate."""
         async with aiosqlite.connect(self.path) as db:
             try:
                 await db.execute(
@@ -144,39 +158,63 @@ class Store:
 
     # ---------------- trades ----------------
 
-    async def save_trade(self, result: TradeResult) -> int:
+    async def save_trade(self, result: TradeResult, triggered_by_event_id: str | None = None) -> int:
         intent = result.intent
         async with aiosqlite.connect(self.path) as db:
             cur = await db.execute(
                 """INSERT INTO trades (market_id, slug, side, price, size_usdc, edge,
                                        confidence, status, fill_price, filled_size_usdc,
-                                       order_id, error, intent_json, executed_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                       order_id, error, intent_json, triggered_by_event_id,
+                                       executed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     intent.market_id, intent.slug, intent.side, intent.price,
                     intent.size_usdc, intent.edge, intent.confidence, result.status,
                     result.fill_price, result.filled_size_usdc, result.order_id,
                     result.error, json.dumps(intent.model_dump(mode="json")),
-                    result.executed_at.isoformat(),
+                    triggered_by_event_id, result.executed_at.isoformat(),
                 ),
             )
             await db.commit()
             return cur.lastrowid
 
-    async def realized_pnl_today_usdc(self) -> float:
-        """Naive intraday PnL: sum of (size * (fill_price-1)) for filled losers, etc.
+    # ---------------- settlements ----------------
 
-        For dry_run mode we just return 0; the circuit breaker only matters live.
-        """
+    async def save_settlement(
+        self, *, market_id: str, side: str, entry_price: float, exit_price: float,
+        size_usdc: float, pnl_usdc: float, reason: str,
+        triggered_by_event_id: str | None, settled_at: datetime,
+    ) -> int:
+        async with aiosqlite.connect(self.path) as db:
+            cur = await db.execute(
+                """INSERT INTO settlements (market_id, side, entry_price, exit_price,
+                                            size_usdc, pnl_usdc, reason,
+                                            triggered_by_event_id, settled_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (market_id, side, entry_price, exit_price, size_usdc, pnl_usdc,
+                 reason, triggered_by_event_id, settled_at.isoformat()),
+            )
+            await db.commit()
+            return cur.lastrowid
+
+    async def realized_pnl_today_usdc(self) -> float:
         start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         async with aiosqlite.connect(self.path) as db:
             async with db.execute(
-                """SELECT side, fill_price, filled_size_usdc FROM trades
-                   WHERE executed_at >= ? AND status = 'filled'""",
+                "SELECT COALESCE(SUM(pnl_usdc), 0) FROM settlements WHERE settled_at >= ?",
                 (start,),
             ) as cur:
+                row = await cur.fetchone()
+        return float(row[0] if row else 0.0)
+
+    async def source_outcomes(self) -> list[tuple[str, bool]]:
+        """Return (source_handle, won) pairs joining settlements ↔ events for credibility learning."""
+        async with aiosqlite.connect(self.path) as db:
+            async with db.execute(
+                """SELECT e.source_handle, s.pnl_usdc
+                   FROM settlements s
+                   JOIN events e ON e.id = s.triggered_by_event_id
+                   ORDER BY s.settled_at"""
+            ) as cur:
                 rows = await cur.fetchall()
-        # Without resolution data we can't compute true PnL; treat unfilled risk
-        # as zero. The circuit breaker uses recent realized losses if you record
-        # them via save_trade with status='filled' and a settlement script.
-        return 0.0
+        return [(r[0], r[1] > 0) for r in rows]

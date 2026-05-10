@@ -21,8 +21,9 @@ dependencies = [
 
 [project.optional-dependencies]
 trade = ["py-clob-client>=0.17.0", "web3>=6.20.0"]
+metrics = ["prometheus-client>=0.20.0"]
 dashboard = ["fastapi>=0.111.0", "uvicorn>=0.30.0"]
-dev = ["pytest>=8.2.0", "pytest-asyncio>=0.23.0", "ruff>=0.5.0"]
+dev = ["pytest>=8.2.0", "pytest-asyncio>=0.23.0", "ruff>=0.5.0", "prometheus-client>=0.20.0"]
 
 [project.scripts]
 osint-trader = "osint_trader.main:cli"

@@ -24,6 +24,7 @@ def _snapshot(yes: float = 0.4) -> MarketSnapshot:
         slug="will-the-iranian-regime-fall",
         title="Will the Iranian regime fall",
         yes_price=yes, no_price=round(1 - yes, 4),
+        liquidity_usdc=10_000.0,
         yes_token_id="100", no_token_id="200",
     )
 

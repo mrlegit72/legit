@@ -1,10 +1,17 @@
-"""Telegram alert client (Bot API).
+"""Telegram alert client (Bot API) with tiered routing.
 
-Used to push human-readable signal/trade alerts to a chat. Pure HTTP — no
-Telethon dependency, so it works even when the OSINT Telegram session is
-disabled.
+Tiers:
+  info       — every analyst signal, even if risk drops it. Useful for tuning.
+  actionable — passed sizing, will trade in non-dry_run modes.
+  executed   — order outcome (filled/rejected/error/dry_run).
+  position   — exits (take_profit/stop_loss/max_hold) with realised PnL.
+
+Alert level filtering is configurable; default is "actionable" which keeps the
+chat quiet enough to actually pay attention to.
 """
 from __future__ import annotations
+
+from typing import Literal
 
 import httpx
 
@@ -13,11 +20,20 @@ from ..observability import get_logger
 
 logger = get_logger(__name__)
 
+Tier = Literal["info", "actionable", "executed", "position"]
+_TIER_RANK = {"info": 0, "actionable": 1, "executed": 2, "position": 3}
+
 
 class TelegramAlerter:
-    def __init__(self, bot_token: str, chat_id: str) -> None:
+    def __init__(
+        self,
+        bot_token: str,
+        chat_id: str,
+        min_tier: Tier = "actionable",
+    ) -> None:
         self.bot_token = bot_token
         self.chat_id = chat_id
+        self.min_tier = min_tier
         self._http = httpx.AsyncClient(timeout=10)
 
     async def aclose(self) -> None:
@@ -27,12 +43,25 @@ class TelegramAlerter:
     def enabled(self) -> bool:
         return bool(self.bot_token and self.chat_id)
 
-    async def signal_alert(self, event: NewsEvent, signal: Signal, summary: str) -> None:
-        if not self.enabled:
+    def _emits(self, tier: Tier) -> bool:
+        return self.enabled and _TIER_RANK[tier] >= _TIER_RANK[self.min_tier]
+
+    async def signal_alert(
+        self,
+        event: NewsEvent,
+        signal: Signal,
+        summary: str,
+        *,
+        actionable: bool,
+        skip_reason: str | None = None,
+    ) -> None:
+        tier: Tier = "actionable" if actionable else "info"
+        if not self._emits(tier):
             return
         emoji = self._tier_emoji(signal.confidence)
+        flag = "" if actionable else f"  _(skipped: `{skip_reason}`)_"
         text = (
-            f"{emoji} *Signal*: {signal.market_id}\n"
+            f"{emoji} *Signal*: {signal.market_id}{flag}\n"
             f"side: *{signal.side.upper()}*  prob_yes: `{signal.prob_yes:.2f}`  "
             f"edge: `{signal.edge:+.2f}`  conf: `{signal.confidence}`\n"
             f"\n_summary_: {summary or event.text[:140]}\n"
@@ -42,7 +71,7 @@ class TelegramAlerter:
         await self._send(text)
 
     async def trade_alert(self, intent: TradeIntent, result: TradeResult) -> None:
-        if not self.enabled:
+        if not self._emits("executed"):
             return
         status_emoji = {"dry_run": "🧪", "filled": "✅", "rejected": "🚫", "error": "⚠️"}.get(result.status, "•")
         text = (
@@ -53,6 +82,25 @@ class TelegramAlerter:
         )
         if result.error:
             text += f"\nerror: `{result.error[:200]}`"
+        await self._send(text)
+
+    async def position_alert(
+        self, intent: TradeIntent, reason: str, exit_price: float, pnl_usdc: float,
+    ) -> None:
+        if not self._emits("position"):
+            return
+        emoji = "💰" if pnl_usdc > 0 else "💸"
+        text = (
+            f"{emoji} *Closed*: {intent.slug}  ({reason})\n"
+            f"side: *{intent.side.upper()}*  exit: `{exit_price:.3f}`  "
+            f"pnl: `${pnl_usdc:+.2f}`"
+        )
+        await self._send(text)
+
+    async def kill_switch_alert(self, halted: bool) -> None:
+        if not self.enabled:
+            return
+        text = "⛔ *Trading halted* via /halt" if halted else "✅ *Trading resumed* via /resume"
         await self._send(text)
 
     @staticmethod
