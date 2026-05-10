@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+output/scripts/*.json
+output/audio/*.mp3
+output/images/*.png
+output/metadata/*.json
+!output/scripts/.gitkeep
+!output/audio/.gitkeep
+!output/images/.gitkeep
+!output/metadata/.gitkeep
