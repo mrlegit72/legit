@@ -1,0 +1,33 @@
+# OSINT sources. Each source has a credibility weight in [0, 1].
+# Weights inform corroboration scoring; high-weight sources can fire alone,
+# low-weight sources require corroboration before a signal is emitted.
+
+telegram:
+  channels:
+    - { handle: SabrenNewss,   credibility: 0.55, language: ar }
+    - { handle: tasnimnews,    credibility: 0.45, language: fa }
+    - { handle: iranintltv,    credibility: 0.70, language: fa }
+    - { handle: abualiexpress, credibility: 0.65, language: he }
+    - { handle: amitsegal,     credibility: 0.80, language: he }
+
+rss:
+  feeds:
+    - { url: "https://www.reuters.com/world/middle-east/rss",        credibility: 0.92, language: en }
+    - { url: "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml", credibility: 0.90, language: en }
+    - { url: "https://www.aljazeera.com/xml/rss/all.xml",            credibility: 0.78, language: en }
+    - { url: "https://www.timesofisrael.com/feed/",                  credibility: 0.82, language: en }
+
+# GDELT 2.0 doc API (queryable, no key needed)
+gdelt:
+  enabled: true
+  query: "(Iran OR Israel OR Hormuz OR Kharg) AND (strike OR attack OR ceasefire OR negotiation)"
+  poll_seconds: 180
+  credibility: 0.70
+
+# Optional: nitter mirrors for X/Twitter without API keys.
+nitter:
+  enabled: false
+  base: "https://nitter.privacydev.net"
+  handles: []
+  poll_seconds: 120
+  credibility: 0.40   # X is noisy; require corroboration

@@ -1,0 +1,47 @@
+# Polymarket markets the analyst is allowed to act on.
+# market_id is the internal alias used in prompts.
+# slug must match the Polymarket market slug.
+# keywords sharpen retrieval & relevance scoring before Claude is consulted.
+# escalation_direction: which side ("yes"/"no") wins when the situation escalates.
+markets:
+  - market_id: strait-of-hormuz-traffic
+    slug: strait-of-hormuz-traffic-returns-to-normal
+    title: "Strait of Hormuz traffic returns to normal"
+    keywords: [hormuz, strait, oil tanker, shipping, naval, blockade]
+    escalation_direction: "no"
+    timeframe_days: 30
+
+  - market_id: us-x-iran-permanent-peace-deal
+    slug: us-x-iran-permanent-peace-deal
+    title: "US x Iran permanent peace deal"
+    keywords: [peace deal, negotiation, treaty, JCPOA, sanctions lifted, diplomacy]
+    escalation_direction: "no"
+    timeframe_days: 90
+
+  - market_id: iran-x-israelus-conflict-ends
+    slug: iran-x-israelus-conflict-ends
+    title: "Iran x Israel/US conflict ends"
+    keywords: [ceasefire, conflict ends, withdrawal, truce]
+    escalation_direction: "no"
+    timeframe_days: 60
+
+  - market_id: kharg-island-control
+    slug: kharg-island-no-longer-under-iranian-control
+    title: "Kharg Island no longer under Iranian control"
+    keywords: [kharg, island, oil terminal, seized, captured]
+    escalation_direction: "yes"
+    timeframe_days: 60
+
+  - market_id: trump-end-ops-iran
+    slug: trump-announces-end-of-military-operations-iran
+    title: "Trump announces end of military operations against Iran"
+    keywords: [trump, end operations, withdraw, halt strikes]
+    escalation_direction: "no"
+    timeframe_days: 60
+
+  - market_id: iranian-regime-fall
+    slug: will-the-iranian-regime-fall
+    title: "Will the Iranian regime fall"
+    keywords: [regime, supreme leader, khamenei, overthrow, revolution, IRGC]
+    escalation_direction: "yes"
+    timeframe_days: 365
