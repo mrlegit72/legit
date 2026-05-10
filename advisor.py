@@ -13,17 +13,31 @@ Replaces the 1% AUM advisor with a $20/month tool that does:
 Usage:
   export ANTHROPIC_API_KEY=sk-ant-...
   python advisor.py
+  python advisor.py --service 3            # skip menu
+  python advisor.py --no-save              # don't write transcript
+  python advisor.py --no-thinking          # hide summarized reasoning
+  python advisor.py --save-dir ~/advice    # custom transcript dir
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
-import textwrap
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 import anthropic
 
 MODEL = "claude-opus-4-7"
+DEFAULT_SAVE_DIR = Path.home() / "claude-advisor"
+
+DISCLAIMER = """\
+This is educational analysis, not personalized investment advice. Numbers and
+ETF/ticker recommendations are reasoning, not orders. Verify tax specifics with
+a CPA and confirm holdings before trading. You are responsible for your decisions.
+"""
 
 SYSTEM_PROMPT = """You are a rigorous, fee-only financial advisor. You answer the
 user's questions the way a CFP/CFA fiduciary would: cite specific reasoning, show
@@ -41,10 +55,18 @@ Ground rules for every response:
   responsible for their own decisions and should verify tax specifics with a CPA.
 """
 
-PROMPTS: dict[str, dict[str, object]] = {
-    "1": {
-        "title": "Portfolio allocation",
-        "fields": [
+
+@dataclass(frozen=True)
+class Service:
+    title: str
+    fields: list[tuple[str, str]]
+    template: str
+
+
+SERVICES: dict[str, Service] = {
+    "1": Service(
+        title="Portfolio allocation",
+        fields=[
             ("age", "Age"),
             ("horizon", "Investment horizon (years until you need this money)"),
             ("risk", "Risk tolerance (conservative / moderate / aggressive)"),
@@ -53,7 +75,7 @@ PROMPTS: dict[str, dict[str, object]] = {
             ("holdings", "Existing holdings (list what you currently own)"),
             ("goals", "Goals (retirement / house / passive income / wealth building)"),
         ],
-        "template": """I want you to build a complete portfolio allocation for me.
+        template="""I want you to build a complete portfolio allocation for me.
 
 My profile:
 - Age: {age}
@@ -72,14 +94,14 @@ Build me:
 5. The logic behind every decision.
 
 Then flag: what would a traditional 60/40 advisor put me in vs what you recommend, and why.""",
-    },
-    "2": {
-        "title": "Portfolio health check",
-        "fields": [
+    ),
+    "2": Service(
+        title="Portfolio health check",
+        fields=[
             ("portfolio", "Your current holdings with amounts (paste them)"),
             ("scenario", "Stress scenario (e.g. 'tech crashes 40%' / 'rates rise 2%' / 'dollar weakens 15%')"),
         ],
-        "template": """Here are my current holdings with amounts:
+        template="""Here are my current holdings with amounts:
 {portfolio}
 
 Run a full health check:
@@ -90,13 +112,13 @@ Run a full health check:
 - What should I sell, hold, and buy more of?
 
 Give me specific actions, not general advice.""",
-    },
-    "3": {
-        "title": "Company deep dive",
-        "fields": [
+    ),
+    "3": Service(
+        title="Company deep dive",
+        fields=[
             ("ticker", "Company name or ticker"),
         ],
-        "template": """I want a full due diligence report on {ticker}.
+        template="""I want a full due diligence report on {ticker}.
 
 Cover:
 1. Business model: how does it actually make money?
@@ -109,15 +131,15 @@ Cover:
 8. Verdict: would you buy, hold, or avoid this at current price and why?
 
 Compare it to its 2 main competitors using the same framework.""",
-    },
-    "4": {
-        "title": "Sector comparison",
-        "fields": [
+    ),
+    "4": Service(
+        title="Sector comparison",
+        fields=[
             ("sector_a", "Sector A"),
             ("sector_b", "Sector B"),
             ("years", "Time horizon (years, e.g. 3-5)"),
         ],
-        "template": """I'm choosing between investing in {sector_a} vs {sector_b} for the next {years} years.
+        template="""I'm choosing between investing in {sector_a} vs {sector_b} for the next {years} years.
 
 Compare them across:
 - Macro tailwinds and headwinds for each.
@@ -126,20 +148,21 @@ Compare them across:
 - Best ETF or index fund for each with expense ratios.
 - What scenario makes each the better bet?
 
-Give me a recommendation with logic, not a "it depends.""",
-    },
-    "5": {
-        "title": "Tax optimization audit",
-        "fields": [
+Give me a recommendation with logic, not an "it depends".""",
+    ),
+    "5": Service(
+        title="Tax optimization audit",
+        fields=[
             ("income", "Annual income ($)"),
             ("bracket", "Federal tax bracket (%)"),
             ("state", "State"),
             ("portfolio_size", "Portfolio size ($)"),
             ("accounts", "Account types you hold (taxable brokerage / 401k / IRA / Roth IRA)"),
-            ("gains", "Estimated capital gains this year ($) — break out short-term vs long-term"),
+            ("st_gains", "Estimated SHORT-term capital gains this year ($)"),
+            ("lt_gains", "Estimated LONG-term capital gains this year ($)"),
             ("losses", "Any positions currently at a loss (list them)"),
         ],
-        "template": """I need a full tax optimization audit for my investment portfolio.
+        template="""I need a full tax optimization audit for my investment portfolio.
 
 My situation:
 - Annual income: ${income}
@@ -147,7 +170,7 @@ My situation:
 - State: {state}
 - Portfolio size: ${portfolio_size}
 - Account types I hold: {accounts}
-- Estimated capital gains this year: {gains}
+- Estimated capital gains this year: short-term ${st_gains}, long-term ${lt_gains}
 - Any positions currently at a loss: {losses}
 
 Tell me:
@@ -156,10 +179,10 @@ Tell me:
 3. Should I convert any traditional IRA to Roth this year given my bracket?
 4. What is my optimal contribution strategy across account types?
 5. What am I likely leaving on the table that most people in my situation miss?""",
-    },
-    "6": {
-        "title": "Retirement income modeling",
-        "fields": [
+    ),
+    "6": Service(
+        title="Retirement income modeling",
+        fields=[
             ("years_to_retirement", "Years from retirement"),
             ("portfolio", "Current portfolio ($)"),
             ("monthly", "Monthly contribution ($)"),
@@ -167,7 +190,7 @@ Tell me:
             ("target_income", "Target monthly income in retirement ($)"),
             ("seq_risk", "Sequence-of-returns risk tolerance (low / medium)"),
         ],
-        "template": """I'm {years_to_retirement} years from retirement. I want to model my income.
+        template="""I'm {years_to_retirement} years from retirement. I want to model my income.
 
 My situation:
 - Current portfolio: ${portfolio}
@@ -181,92 +204,211 @@ Build me:
 2. Safe withdrawal rate for each scenario.
 3. What gap exists between my projected income and my target.
 4. What I need to change NOW to close that gap.
-5. A Roth conversion strategy if it applies.
 
 Show the math step by step.""",
-    },
+    ),
 }
 
 
-def menu() -> str:
-    print("\n" + "=" * 60)
+def banner() -> None:
+    print("\n" + "=" * 64)
     print("  CLAUDE FINANCIAL ADVISOR")
     print("  Replaces the 1% AUM advisor for $20/month")
-    print("=" * 60)
-    for key, p in PROMPTS.items():
-        print(f"  {key}. {p['title']}")
+    print("=" * 64)
+    print()
+    for line in DISCLAIMER.splitlines():
+        print(f"  {line}")
+    print()
+
+
+def menu() -> str | None:
+    print("-" * 64)
+    for key, svc in SERVICES.items():
+        print(f"  {key}. {svc.title}")
     print("  q. Quit")
     while True:
         choice = input("\nPick a service: ").strip().lower()
         if choice == "q":
-            sys.exit(0)
-        if choice in PROMPTS:
+            return None
+        if choice in SERVICES:
             return choice
-        print(f"Invalid choice. Pick 1-{len(PROMPTS)} or q.")
+        print(f"Invalid choice. Pick 1-{len(SERVICES)} or q.")
 
 
 def collect_inputs(fields: list[tuple[str, str]]) -> dict[str, str]:
     print()
     answers: dict[str, str] = {}
     for key, label in fields:
-        value = input(f"{label}: ").strip()
+        value = input(f"  {label}: ").strip()
         answers[key] = value or "(not provided)"
     return answers
 
 
-def run(prompt: str) -> None:
-    client = anthropic.Anthropic()
-    print("\n" + "-" * 60)
-    print("  Claude is thinking and responding...")
-    print("-" * 60 + "\n")
+def stream_turn(
+    client: anthropic.Anthropic,
+    messages: list[dict[str, str]],
+    show_thinking: bool,
+) -> tuple[str, anthropic.types.Usage]:
+    """Stream one turn. Print as it arrives. Return (assistant_text, usage)."""
+    thinking_param: dict[str, str] = {"type": "adaptive"}
+    if show_thinking:
+        thinking_param["display"] = "summarized"
+
+    in_thinking = False
+    in_text = False
 
     with client.messages.stream(
         model=MODEL,
         max_tokens=16000,
         system=SYSTEM_PROMPT,
-        thinking={"type": "adaptive"},
+        thinking=thinking_param,
         output_config={"effort": "high"},
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
     ) as stream:
         for event in stream:
-            if event.type == "content_block_delta" and event.delta.type == "text_delta":
-                print(event.delta.text, end="", flush=True)
+            if event.type == "content_block_start":
+                block_type = event.content_block.type
+                if block_type == "thinking" and show_thinking:
+                    print("\n[thinking]\n", end="", flush=True)
+                    in_thinking = True
+                elif block_type == "text":
+                    if in_thinking:
+                        print("\n", end="", flush=True)
+                        in_thinking = False
+                    print("[answer]\n" if show_thinking else "", end="", flush=True)
+                    in_text = True
+            elif event.type == "content_block_delta":
+                delta = event.delta
+                if delta.type == "thinking_delta" and show_thinking:
+                    print(delta.thinking, end="", flush=True)
+                elif delta.type == "text_delta":
+                    print(delta.text, end="", flush=True)
+            elif event.type == "content_block_stop" and in_text:
+                in_text = False
 
         final = stream.get_final_message()
 
-    usage = final.usage
-    print("\n\n" + "-" * 60)
-    print(
-        f"  Tokens — input: {usage.input_tokens}  output: {usage.output_tokens}"
-        f"  cache_read: {getattr(usage, 'cache_read_input_tokens', 0)}"
+    answer = "".join(b.text for b in final.content if b.type == "text")
+    return answer, final.usage
+
+
+def save_transcript(save_dir: Path, service_title: str, messages: list[dict[str, str]]) -> Path:
+    save_dir.mkdir(parents=True, exist_ok=True)
+    slug = service_title.lower().replace(" ", "-")
+    path = save_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{slug}.md"
+    with path.open("w") as f:
+        f.write(f"# {service_title}\n\n")
+        f.write(f"_Generated {datetime.now():%Y-%m-%d %H:%M}_\n\n")
+        for msg in messages:
+            role = "You" if msg["role"] == "user" else "Claude"
+            f.write(f"## {role}\n\n{msg['content']}\n\n")
+    return path
+
+
+def conversation(
+    client: anthropic.Anthropic,
+    service: Service,
+    initial_prompt: str,
+    save_dir: Path | None,
+    show_thinking: bool,
+) -> None:
+    messages: list[dict[str, str]] = [{"role": "user", "content": initial_prompt}]
+    print("\n" + "-" * 64)
+    print(f"  Running: {service.title}")
+    print("-" * 64)
+
+    while True:
+        try:
+            answer, usage = stream_turn(client, messages, show_thinking)
+        except anthropic.APIConnectionError:
+            print("\nNetwork error. Check your connection and try again.", file=sys.stderr)
+            return
+        except anthropic.AuthenticationError:
+            print("\nInvalid ANTHROPIC_API_KEY.", file=sys.stderr)
+            sys.exit(1)
+        except anthropic.RateLimitError:
+            print("\nRate limited. Wait a minute and retry.", file=sys.stderr)
+            return
+        except anthropic.APIStatusError as e:
+            print(f"\nAPI error ({e.status_code}): {e.message}", file=sys.stderr)
+            return
+
+        messages.append({"role": "assistant", "content": answer})
+
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        print(
+            f"\n\n  [tokens] in={usage.input_tokens} out={usage.output_tokens}"
+            f" cache_read={cache_read}"
+        )
+
+        if save_dir is not None:
+            path = save_transcript(save_dir, service.title, messages)
+            print(f"  [saved] {path}")
+
+        print("\n" + "-" * 64)
+        followup = input("Follow-up question (Enter to finish): ").strip()
+        if not followup:
+            return
+        messages.append({"role": "user", "content": followup})
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Claude financial advisor.")
+    p.add_argument(
+        "--service", "-s",
+        choices=list(SERVICES.keys()),
+        help="Skip the menu and run this service directly.",
     )
-    print("-" * 60)
+    p.add_argument(
+        "--save-dir",
+        type=Path,
+        default=DEFAULT_SAVE_DIR,
+        help=f"Where to save transcripts (default: {DEFAULT_SAVE_DIR}).",
+    )
+    p.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Don't write transcripts to disk.",
+    )
+    p.add_argument(
+        "--no-thinking",
+        action="store_true",
+        help="Don't show Claude's summarized reasoning.",
+    )
+    return p.parse_args()
 
 
-def main() -> None:
+def main() -> int:
+    args = parse_args()
+
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("error: ANTHROPIC_API_KEY is not set.", file=sys.stderr)
         print("  export ANTHROPIC_API_KEY=sk-ant-...", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
-    while True:
-        choice = menu()
-        spec = PROMPTS[choice]
-        print(f"\n>>> {spec['title']}")
-        print(textwrap.fill(
-            "Answer the prompts below. Press Enter to skip a field "
-            "(Claude will note it as not provided).",
-            width=60,
-        ))
-        answers = collect_inputs(spec["fields"])  # type: ignore[arg-type]
-        prompt = spec["template"].format(**answers)  # type: ignore[union-attr]
-        try:
-            run(prompt)
-        except anthropic.APIStatusError as e:
-            print(f"\nAPI error ({e.status_code}): {e.message}", file=sys.stderr)
-        except KeyboardInterrupt:
-            print("\n\n[interrupted]")
+    save_dir = None if args.no_save else args.save_dir
+    show_thinking = not args.no_thinking
+
+    banner()
+    client = anthropic.Anthropic()
+
+    try:
+        while True:
+            choice = args.service or menu()
+            if choice is None:
+                return 0
+            service = SERVICES[choice]
+            print(f"\n>>> {service.title}")
+            print("    Answer the prompts below. Press Enter to skip a field.")
+            answers = collect_inputs(service.fields)
+            prompt = service.template.format(**answers)
+            conversation(client, service, prompt, save_dir, show_thinking)
+            if args.service:
+                return 0  # one-shot mode: exit after a single service
+    except (KeyboardInterrupt, EOFError):
+        print("\n\n[exited]")
+        return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
