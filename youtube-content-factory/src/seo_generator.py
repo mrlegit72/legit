@@ -36,7 +36,13 @@ class SeoGenerator:
     def __init__(self, api_key: str):
         self._client = anthropic.Anthropic(api_key=api_key)
 
-    def generate(self, video_title: str, keywords: List[str], summary: str) -> SeoBundle:
+    def generate(
+        self,
+        video_title: str,
+        keywords: List[str],
+        summary: str,
+        extra_context: str = "",
+    ) -> SeoBundle:
         log.info("Generating SEO bundle for: %s", video_title)
         user = (
             f"VIDEO TITLE: {video_title}\n"
@@ -46,6 +52,8 @@ class SeoGenerator:
             "description (~200 words) with keywords woven in naturally, "
             "10 tags, and 5 thumbnail concepts."
         )
+        if extra_context:
+            user += f"\n\n--- EXTRA CONTEXT ---\n{extra_context}"
         response = self._client.messages.parse(
             model=MODEL,
             max_tokens=8000,

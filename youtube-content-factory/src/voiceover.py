@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
@@ -20,6 +21,41 @@ API_BASE = "https://api.elevenlabs.io/v1"
 
 class ElevenLabsError(RuntimeError):
     pass
+
+
+@dataclass
+class VoiceInfo:
+    voice_id: str
+    name: str
+    category: str  # "premade" | "cloned" | "professional" | "generated"
+    description: str = ""
+
+
+def list_voices(api_key: str) -> List[VoiceInfo]:
+    """List all voices available to this account, including cloned ones.
+
+    Free/Starter tiers see premade voices. ElevenLabs Creator+ tiers get to
+    *clone* their own voice — clone in the web UI, then run `pipeline voices`
+    to find the new voice_id and paste it into ELEVENLABS_VOICE_ID in .env.
+    """
+    response = requests.get(
+        f"{API_BASE}/voices",
+        headers={"xi-api-key": api_key},
+        timeout=30,
+    )
+    if not response.ok:
+        raise ElevenLabsError(
+            f"ElevenLabs /voices error {response.status_code}: {response.text[:200]}"
+        )
+    out: List[VoiceInfo] = []
+    for v in response.json().get("voices", []):
+        out.append(VoiceInfo(
+            voice_id=v.get("voice_id", ""),
+            name=v.get("name", ""),
+            category=v.get("category", ""),
+            description=(v.get("description") or "")[:80],
+        ))
+    return out
 
 
 class Voiceover:

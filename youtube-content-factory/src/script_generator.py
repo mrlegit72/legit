@@ -70,7 +70,13 @@ class ScriptGenerator:
     def __init__(self, api_key: str):
         self._client = anthropic.Anthropic(api_key=api_key)
 
-    def plan(self, niche: str, market: str, num_videos: int = 10) -> ContentPlan:
+    def plan(
+        self,
+        niche: str,
+        market: str,
+        num_videos: int = 10,
+        extra_context: str = "",
+    ) -> ContentPlan:
         log.info("Planning %d videos for niche=%r market=%r", num_videos, niche, market)
         user = (
             f"NICHE: {niche}\n"
@@ -78,11 +84,18 @@ class ScriptGenerator:
             f"TASK: Produce a content plan of {num_videos} video ideas. "
             "Optimize for CTR and search intent in the target market."
         )
+        if extra_context:
+            user += f"\n\n--- EXTRA CONTEXT ---\n{extra_context}"
         return self._parse(user, ContentPlan).model_copy(
             update={"niche": niche, "market": market}
         )
 
-    def script(self, idea: VideoIdea, target_minutes: int) -> VideoScript:
+    def script(
+        self,
+        idea: VideoIdea,
+        target_minutes: int,
+        extra_context: str = "",
+    ) -> VideoScript:
         log.info("Writing %d-minute script for: %s", target_minutes, idea.title)
         user = (
             f"VIDEO TITLE: {idea.title}\n"
@@ -93,6 +106,8 @@ class ScriptGenerator:
             f"(~{target_minutes * 150} spoken words total)\n"
             "TASK: Write the full structured script."
         )
+        if extra_context:
+            user += f"\n\n--- EXTRA CONTEXT ---\n{extra_context}"
         return self._parse(user, VideoScript)
 
     def _parse(self, user_text: str, schema):

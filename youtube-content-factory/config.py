@@ -31,6 +31,8 @@ class Config:
     elevenlabs_api_key: str
     elevenlabs_voice_id: str
     elevenlabs_model_id: str
+    youtube_api_key: str  # may be empty — optional, used only for keyword research
+    pixabay_api_key: str  # may be empty — optional, used only for music search
     default_niche: str
     default_market: str
     default_video_length_minutes: int
@@ -49,6 +51,8 @@ class Config:
             elevenlabs_model_id=os.getenv(
                 "ELEVENLABS_MODEL_ID", "eleven_multilingual_v2"
             ),
+            youtube_api_key=os.getenv("YOUTUBE_API_KEY", ""),
+            pixabay_api_key=os.getenv("PIXABAY_API_KEY", ""),
             default_niche=os.getenv("DEFAULT_NICHE", "AI Tools for Productivity"),
             default_market=os.getenv("DEFAULT_MARKET", "US"),
             default_video_length_minutes=int(

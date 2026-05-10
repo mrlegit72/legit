@@ -63,6 +63,11 @@ class YouTubeUploader:
                 creds = flow.run_local_server(port=0)
             TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
             TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
+            try:
+                # Token contains an OAuth refresh token — owner-only.
+                TOKEN_PATH.chmod(0o600)
+            except OSError:
+                pass  # best-effort on Windows
             log.info("Cached YouTube token at %s", TOKEN_PATH)
 
         self._service = build("youtube", "v3", credentials=creds)
