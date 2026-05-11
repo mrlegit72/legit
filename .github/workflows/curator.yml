@@ -2,8 +2,10 @@ name: Autonomous Curator
 
 on:
   schedule:
-    # Hourly. GitHub may delay scheduled runs under load.
-    - cron: "0 * * * *"
+    # Every 4 hours. With CURATOR_MAX_POSTS=1 this stays well under
+    # the X Free Tier monthly write cap (~500/month).
+    # GitHub may delay scheduled runs under load.
+    - cron: "0 */4 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -46,7 +48,7 @@ jobs:
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           CURATOR_DB_PATH: curator_state.sqlite3
-          CURATOR_MAX_POSTS: "3"
+          CURATOR_MAX_POSTS: "1"
           CURATOR_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: python curator.py
 

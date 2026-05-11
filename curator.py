@@ -49,7 +49,7 @@ GOOGLE_NEWS_RSS = (
     "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"
 )
 DB_PATH = Path(os.getenv("CURATOR_DB_PATH", "curator_state.sqlite3"))
-MAX_POSTS_PER_RUN = int(os.getenv("CURATOR_MAX_POSTS", "3"))
+MAX_POSTS_PER_RUN = int(os.getenv("CURATOR_MAX_POSTS", "1"))
 X_CHAR_LIMIT = 280
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-7")
 DRY_RUN = os.getenv("CURATOR_DRY_RUN", "false").lower() in {"1", "true", "yes"}

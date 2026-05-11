@@ -48,9 +48,9 @@ tab (with optional `dry_run=true`) or wait for the hourly cron.
 
 ## X Free Tier note
 
-The Free Tier of the X API allows a small number of writes per month. Tune
-`CURATOR_MAX_POSTS` (default `3`) and the cron schedule so you stay inside the
-quota.
+The Free Tier of the X API allows roughly 500 writes per month. The defaults
+ship Free-Tier-safe: cron every 4 hours and `CURATOR_MAX_POSTS=1`
+(~180 posts/month). Raise either at your own risk.
 
 ## Security
 
