@@ -7,11 +7,17 @@ Pipeline:
 4. Parse strict JSON; fail closed on bad JSON.
 5. Apply post-hoc guards (market_id whitelist, edge floor handled in risk layer).
 
+Latency budget: each call is bounded by `analyst_timeout_s`. On timeout, we
+fall back to the fast model (Haiku) with a half budget. On second timeout we
+return an empty verdict — better to miss a trade than miss the next 5 by
+queueing behind a slow Opus call.
+
 Prompt caching reference:
 https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -27,9 +33,17 @@ logger = get_logger(__name__)
 
 
 class ClaudeAnalyst:
-    def __init__(self, settings: Settings, system_prompt: str) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        system_prompt: str,
+        analyst_timeout_s: float = 8.0,
+        fallback_timeout_s: float = 4.0,
+    ) -> None:
         self.settings = settings
         self.system_prompt = system_prompt
+        self.analyst_timeout_s = analyst_timeout_s
+        self.fallback_timeout_s = fallback_timeout_s
         self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     async def analyze(
@@ -50,7 +64,6 @@ class ClaudeAnalyst:
                 "timeframe_days": m.timeframe_days,
             })
 
-        # Two-block user message: cached static market list, fresh event payload.
         cached_block = {
             "type": "text",
             "text": "MARKETS:\n" + json.dumps(market_blobs, ensure_ascii=False),
@@ -76,10 +89,21 @@ class ClaudeAnalyst:
         }
 
         try:
-            raw = await self._call_with_retry([cached_block, live_block])
-        except RetryError as exc:
-            logger.warning("claude_call_failed", error=str(exc))
-            return AnalystVerdict(summary_en="", is_propaganda_risk=True, signals=[])
+            raw = await asyncio.wait_for(
+                self._call_with_retry([cached_block, live_block], self.settings.anthropic_model),
+                timeout=self.analyst_timeout_s,
+            )
+        except (asyncio.TimeoutError, RetryError) as exc:
+            logger.warning("analyst_primary_failed_falling_back",
+                           error=str(exc), model=self.settings.anthropic_model)
+            try:
+                raw = await asyncio.wait_for(
+                    self._call_with_retry([cached_block, live_block], self.settings.anthropic_fast_model),
+                    timeout=self.fallback_timeout_s,
+                )
+            except (asyncio.TimeoutError, RetryError) as exc2:
+                logger.warning("analyst_fallback_failed", error=str(exc2))
+                return AnalystVerdict(summary_en="", is_propaganda_risk=True, signals=[])
 
         verdict = self._parse(raw, event_id=event.id, valid_market_ids={m.market_id for m in markets})
         logger.info(
@@ -90,7 +114,7 @@ class ClaudeAnalyst:
         )
         return verdict
 
-    async def _call_with_retry(self, content_blocks: list[dict[str, Any]]) -> str:
+    async def _call_with_retry(self, content_blocks: list[dict[str, Any]], model: str) -> str:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(min=1, max=8),
@@ -98,7 +122,7 @@ class ClaudeAnalyst:
         ):
             with attempt:
                 resp = await self._client.messages.create(
-                    model=self.settings.anthropic_model,
+                    model=model,
                     max_tokens=600,
                     system=[{
                         "type": "text",

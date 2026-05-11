@@ -6,11 +6,13 @@ Spins up:
   * A worker that pulls events, dedups, asks Claude, sizes trades, executes,
     persists, and alerts
   * PositionManager (exits) + OrderMonitor (cancel-replace) loops
-  * Optional: Prometheus metrics server, Telegram kill switch
+  * Optional: Prometheus metrics server, Telegram kill switch,
+    on-chain settlement reader, OpenTelemetry tracing.
+
+Pre-flight: validates every market slug + (in live mode) checks USDC balance.
+Single-instance: file pidlock prevents two copies.
 
 Run:
-    python -m osint_trader.main
-or via console script:
     osint-trader
 """
 from __future__ import annotations
@@ -19,7 +21,7 @@ import argparse
 import asyncio
 import os
 import signal as _sig
-from pathlib import Path
+import sys
 
 from .analysis import (
     ClaudeAnalyst,
@@ -28,6 +30,7 @@ from .analysis import (
     corroboration_score,
     is_relevant_to_any_market,
 )
+from .analysis.regime import RegimeDetector
 from .config import (
     CONFIG_DIR,
     SourcesConfig,
@@ -37,13 +40,17 @@ from .config import (
     load_sources,
 )
 from .credibility import CredibilityTracker
-from .execution import OrderMonitor, PositionManager, Settlement
+from .execution import OrderMonitor, PositionManager, Settlement, quote_for
+from .execution.chain_settlement import ChainSettlementReader
 from .markets import PolymarketClient
 from .models import NewsEvent, TradeIntent
 from .notify import TelegramAlerter
 from .observability import configure_logging, get_logger, metrics
+from .observability import tracing
 from .observability.kill_switch import KillSwitch
+from .observability.leader import LeaderLock, LeaderLockError
 from .persistence import Store
+from .preflight import PreflightError, run_preflight
 from .risk import Bankroll, CircuitBreaker, size_trade
 from .risk.cooldown import CooldownTracker
 from .risk.scenarios import ScenarioRegistry
@@ -61,12 +68,18 @@ class Orchestrator:
         self.queue: EventQueue = asyncio.Queue(maxsize=512)
         self.deduper = Deduper()
         self.poly = PolymarketClient(self.settings)
-        self.analyst = ClaudeAnalyst(self.settings, load_analyst_prompt())
+        timeout_s = float(os.getenv("ANALYST_TIMEOUT_S", "8"))
+        fallback_s = float(os.getenv("ANALYST_FALLBACK_TIMEOUT_S", "4"))
+        self.analyst = ClaudeAnalyst(
+            self.settings, load_analyst_prompt(),
+            analyst_timeout_s=timeout_s, fallback_timeout_s=fallback_s,
+        )
         self.fact_checker = FactChecker(self.settings)
         self.alerter = TelegramAlerter(
             self.settings.telegram_bot_token,
             self.settings.telegram_alert_chat_id,
             min_tier=os.getenv("ALERT_MIN_TIER", "actionable"),  # type: ignore[arg-type]
+            digest_window_s=float(os.getenv("ALERT_DIGEST_WINDOW_S", "0")),
         )
         self.kill_switch = KillSwitch(
             self.settings.telegram_bot_token,
@@ -80,57 +93,80 @@ class Orchestrator:
         self.cooldown = CooldownTracker(minutes=30)
         self.scenarios = ScenarioRegistry.load(CONFIG_DIR / "scenarios.yaml")
         self.credibility = CredibilityTracker()
-        self.settlement = Settlement(self.store, self.bankroll)
+        self.regime = RegimeDetector()
+        self.settlement = Settlement(self.store, self.bankroll, polymarket=self.poly)
         self.position_manager = PositionManager(
             snapshot_provider=self.poly.get_snapshot,
             on_close=self._handle_position_close,
         )
         self.order_monitor = OrderMonitor(self.poly, self.poly.get_snapshot)
+        self.chain_reader = ChainSettlementReader(self.settings.polymarket_funder)
+        self.pricing_strategy = os.getenv("PRICING_STRATEGY", "taker")  # taker | join_bid | mid_minus_bp
+        self.lock = LeaderLock(os.getenv("LEADER_LOCK_PATH", ".osint_trader.lock"))
         self._stop = asyncio.Event()
-        # event-id mapping so we can attribute settlements back to a source
         self._intent_event: dict[str, str] = {}
 
     async def run(self) -> None:
-        await self.store.init()
-        await self._hydrate_credibility()
-        await self.poly.refresh_snapshots(self.markets)
-        metrics.equity(self.bankroll.equity)
-        logger.info(
-            "orchestrator_started",
-            mode=self.settings.trade_mode.value,
-            markets=[m.market_id for m in self.markets],
-        )
+        tracing.init()
+        try:
+            self.lock.acquire()
+        except LeaderLockError as exc:
+            logger.error("leader_lock_failed", error=str(exc))
+            sys.exit(2)
 
-        host = os.getenv("METRICS_HOST", "127.0.0.1")
-        port = int(os.getenv("METRICS_PORT", "9108"))
-
-        tasks = [
-            asyncio.create_task(self._snapshot_refresher(), name="snapshots"),
-            asyncio.create_task(self._worker(), name="worker"),
-            asyncio.create_task(self.position_manager.run(self._stop), name="positions"),
-            asyncio.create_task(self.order_monitor.run(self._stop), name="orders"),
-            asyncio.create_task(self.kill_switch.run(self._stop), name="kill_switch"),
-            asyncio.create_task(metrics.serve_forever(host, port, self._stop), name="metrics"),
-            asyncio.create_task(TelegramSource(self.sources_cfg.telegram_channels).run(self.queue), name="telegram"),
-            asyncio.create_task(RSSSource(self.sources_cfg.rss_feeds).run(self.queue), name="rss"),
-            asyncio.create_task(GDELTSource(self.sources_cfg.gdelt).run(self.queue), name="gdelt"),
-        ]
-
-        loop = asyncio.get_running_loop()
-        for s in (_sig.SIGINT, _sig.SIGTERM):
+        try:
+            await self.store.init()
+            await self._hydrate_credibility()
             try:
-                loop.add_signal_handler(s, self._stop.set)
-            except NotImplementedError:
-                pass  # Windows
+                await run_preflight(self.settings, self.markets, self.poly)
+            except PreflightError as exc:
+                logger.error("preflight_failed", error=str(exc))
+                sys.exit(3)
 
-        await self._stop.wait()
-        logger.info("orchestrator_stopping")
-        for t in tasks:
-            t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        await self.poly.aclose()
-        await self.alerter.aclose()
-        await self.kill_switch.aclose()
+            metrics.equity(self.bankroll.equity)
+            logger.info(
+                "orchestrator_started",
+                mode=self.settings.trade_mode.value,
+                markets=[m.market_id for m in self.markets],
+                pricing_strategy=self.pricing_strategy,
+            )
+
+            host = os.getenv("METRICS_HOST", "127.0.0.1")
+            port = int(os.getenv("METRICS_PORT", "9108"))
+
+            tasks = [
+                asyncio.create_task(self._snapshot_refresher(), name="snapshots"),
+                asyncio.create_task(self._worker(), name="worker"),
+                asyncio.create_task(self.position_manager.run(self._stop), name="positions"),
+                asyncio.create_task(self.order_monitor.run(self._stop), name="orders"),
+                asyncio.create_task(self.kill_switch.run(self._stop), name="kill_switch"),
+                asyncio.create_task(metrics.serve_forever(host, port, self._stop), name="metrics"),
+                asyncio.create_task(TelegramSource(self.sources_cfg.telegram_channels).run(self.queue), name="telegram"),
+                asyncio.create_task(RSSSource(self.sources_cfg.rss_feeds).run(self.queue), name="rss"),
+                asyncio.create_task(GDELTSource(self.sources_cfg.gdelt).run(self.queue), name="gdelt"),
+            ]
+            if self.settings.trade_mode.value == "live" and self.settings.polymarket_funder:
+                tasks.append(asyncio.create_task(
+                    self.chain_reader.run(self._on_chain_payout), name="chain_settlement"))
+
+            loop = asyncio.get_running_loop()
+            for s in (_sig.SIGINT, _sig.SIGTERM):
+                try:
+                    loop.add_signal_handler(s, self._stop.set)
+                except NotImplementedError:
+                    pass
+
+            await self._stop.wait()
+            logger.info("orchestrator_stopping")
+            self.chain_reader.stop()
+            for t in tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await self.poly.aclose()
+            await self.alerter.aclose()
+            await self.kill_switch.aclose()
+        finally:
+            self.lock.release()
 
     # ----------- background loops -----------
 
@@ -146,7 +182,6 @@ class Orchestrator:
                 pass
 
     async def _hydrate_credibility(self) -> None:
-        # Seed priors from YAML, then update from any past resolved trades.
         for ch in self.sources_cfg.telegram_channels:
             self.credibility.seed_prior(ch.handle, ch.credibility)
         for f in self.sources_cfg.rss_feeds:
@@ -160,7 +195,8 @@ class Orchestrator:
             event: NewsEvent = await self.queue.get()
             metrics.queue_depth(self.queue.qsize())
             try:
-                await self._handle_event(event)
+                with tracing.span("handle_event", event_id=event.id, source=event.source_kind):
+                    await self._handle_event(event)
             except Exception:
                 logger.exception("worker_event_failed", event_id=event.id)
                 self.breaker.record_error()
@@ -169,16 +205,15 @@ class Orchestrator:
 
     async def _handle_event(self, event: NewsEvent) -> None:
         metrics.event_received(event.source_kind)
-        # Use learned credibility (Beta-Bernoulli posterior) over the static one.
         event.credibility = self.credibility.credibility(event.source_handle, event.credibility)
+        self.regime.record(event.fetched_at)
 
         if self.deduper.is_duplicate(event):
             metrics.event_dropped("dedup")
             return
         self.deduper.remember(event)
 
-        is_new = await self.store.save_event(event)
-        if not is_new:
+        if not await self.store.save_event(event):
             metrics.event_dropped("dedup_db")
             return
 
@@ -189,21 +224,21 @@ class Orchestrator:
         recent = await self.store.recent_events(since_minutes=360, limit=50)
         cor_mult, corroborating = corroboration_score(event, recent)
 
-        # Skip closed/paused markets entirely so Claude isn't asked to opine.
         active_markets = [m for m in self.markets if not self.poly.is_inactive(m.market_id)]
         if not active_markets:
             metrics.event_dropped("no_active_markets")
             return
 
         snapshots = await self.poly.refresh_snapshots(active_markets)
-        with metrics.measure_claude():
+        with metrics.measure_claude(), tracing.span("claude_analyze"):
             verdict = await self.analyst.analyze(event, active_markets, snapshots, corroborating)
+
+        regime_label, conf_adjustment = self.regime.regime()
 
         for signal in verdict.signals:
             await self.store.save_signal(signal)
             metrics.signal_emitted(signal.market_id, signal.side)
 
-            # Optional fact-check on high-edge claims.
             verified, why = await self.fact_checker.verify(event, signal, corroborating)
             if not verified:
                 logger.info("factcheck_blocked", market=signal.market_id, why=why)
@@ -211,7 +246,6 @@ class Orchestrator:
                                                 actionable=False, skip_reason=f"factcheck:{why}")
                 continue
 
-            # Kill switch
             if self.kill_switch.is_active():
                 await self.alerter.signal_alert(event, signal, verdict.summary_en,
                                                 actionable=False, skip_reason="kill_switch")
@@ -221,13 +255,17 @@ class Orchestrator:
             if snap is None:
                 continue
 
-            # Pull live order book for the side we want to take.
             token_id = snap.yes_token_id if signal.side == "yes" else snap.no_token_id
             book = await self.poly.fetch_orderbook(token_id) if token_id else None
 
+            # Apply regime-aware confidence adjustment via a temporary settings shim.
+            # We bump min_confidence ↑ in calm regimes, ↓ in crisis regimes.
+            effective_min_conf = max(50, self.settings.min_confidence + conf_adjustment)
+            adjusted_settings = self.settings.model_copy(update={"min_confidence": effective_min_conf})
+
             decision = size_trade(
                 signal, snap,
-                settings=self.settings,
+                settings=adjusted_settings,
                 bankroll=self.bankroll,
                 breaker=self.breaker,
                 cooldown=self.cooldown,
@@ -240,11 +278,19 @@ class Orchestrator:
                                                 actionable=False, skip_reason=decision.skip_reason)
                 continue
 
+            # Override taker price with the configured anti-front-running strategy.
+            if book is not None and self.pricing_strategy != "taker":
+                quoted = quote_for(decision.intent.side, book, decision.intent.price,
+                                   strategy=self.pricing_strategy)  # type: ignore[arg-type]
+                decision.intent = decision.intent.model_copy(update={"price": quoted})
+
             await self.alerter.signal_alert(event, signal, verdict.summary_en, actionable=True)
             self.bankroll.add_exposure(decision.intent.market_id, decision.intent.size_usdc)
             self._intent_event[decision.intent.market_id] = event.id
 
-            result = await self.poly.place_order(decision.intent)
+            with tracing.span("place_order", market=decision.intent.market_id,
+                              side=decision.intent.side, regime=regime_label):
+                result = await self.poly.place_order(decision.intent)
             await self.store.save_trade(result, triggered_by_event_id=event.id)
             metrics.trade_recorded(decision.intent.market_id, decision.intent.side, result.status)
             await self.alerter.trade_alert(decision.intent, result)
@@ -261,13 +307,11 @@ class Orchestrator:
 
             metrics.equity(self.bankroll.equity)
 
-    # ----------- exit handler wired into PositionManager -----------
+    # ----------- exit / chain handlers -----------
 
     async def _handle_position_close(self, position, reason: str, mark: float) -> None:
         intent: TradeIntent = position.intent
         triggered_by = self._intent_event.pop(intent.market_id, None)
-        # In dry_run/paper we settle synthetically against the mark; in live
-        # mode you'd post a closing order here and settle on the realised fill.
         pnl = await self.settlement.settle(
             intent=intent,
             entry_price=position.entry_price,
@@ -276,7 +320,6 @@ class Orchestrator:
             triggered_by_event_id=triggered_by,
         )
         await self.alerter.position_alert(intent, reason, mark, pnl)
-        # Update credibility from realised outcome.
         if triggered_by:
             recent = await self.store.recent_events(since_minutes=24 * 60, limit=200)
             for ev in recent:
@@ -284,6 +327,17 @@ class Orchestrator:
                     self.credibility.update(ev.source_handle, won=pnl > 0)
                     break
         metrics.equity(self.bankroll.equity)
+
+    async def _on_chain_payout(self, payout) -> None:
+        """Called when ChainSettlementReader sees a PayoutRedemption for our funder."""
+        logger.info("chain_payout_observed",
+                    condition_id=payout.condition_id,
+                    payout_usdc=payout.payout_usdc,
+                    tx=payout.tx_hash)
+        # Production hook: look up the condition_id → market_id, overwrite the
+        # synthetic settlement row with the realised payout. Left as a TODO
+        # because mapping requires the on-chain conditionId index built at
+        # market creation time, which py-clob-client exposes per-market.
 
 
 def cli() -> None:

@@ -23,9 +23,13 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
+import random
+
 from ..analysis import ClaudeAnalyst, corroboration_score
 from ..config import get_settings, load_analyst_prompt, load_markets
+from ..markets.fill_model import estimate_fill
 from ..markets.orderbook import BookLevel, OrderBook
+from ..markets.subgraph import fetch_resolution
 from ..models import MarketSnapshot, NewsEvent
 from ..risk import Bankroll, CircuitBreaker, size_trade
 from ..risk.cooldown import CooldownTracker
@@ -35,7 +39,7 @@ from ..sources.base import stable_event_id
 console = Console()
 
 
-async def run(path: Path) -> None:
+async def run(path: Path, *, use_subgraph_resolutions: bool = True, seed: int = 42) -> None:
     settings = get_settings()
     markets = load_markets()
     by_id = {m.market_id: m for m in markets}
@@ -45,6 +49,18 @@ async def run(path: Path) -> None:
                              starting_equity=settings.bankroll_usdc)
     cooldown = CooldownTracker(minutes=30)
     scenarios = ScenarioRegistry.load(Path("config/scenarios.yaml"))
+    rng = random.Random(seed)
+    n_filled = n_missed = 0
+
+    # Optional: hydrate resolutions from the live Polymarket Gamma API for
+    # markets that have already settled. Falls back to the JSONL `resolutions`
+    # field when the subgraph call fails or the market is still open.
+    live_resolutions: dict[str, int | None] = {}
+    if use_subgraph_resolutions:
+        for m in markets:
+            live_resolutions[m.market_id] = await fetch_resolution(
+                settings.polymarket_gamma_host, m.slug,
+            )
 
     table = Table(title="Backtest results")
     for col in ("event", "market", "side", "size", "fill", "exit", "pnl", "skip"):
@@ -111,12 +127,31 @@ async def run(path: Path) -> None:
                               decision.skip_reason or "skipped")
                 continue
             intent = decision.intent
+
+            # Adverse-selection fill model: maybe we don't get filled at all,
+            # maybe partial. Adjusts intent.size_usdc and intent.price in place.
+            filled_usdc, fill_price = estimate_fill(
+                intent.side, intent.size_usdc, intent.price, book, rng=rng,
+            )
+            if filled_usdc < 1.0:
+                n_missed += 1
+                table.add_row(text[:30], intent.market_id, intent.side,
+                              f"${intent.size_usdc:.2f}", f"{intent.price:.3f}",
+                              "-", "-", "missed_fill")
+                continue
+            n_filled += 1
+            intent = intent.model_copy(update={
+                "size_usdc": round(filled_usdc, 2),
+                "price": round(fill_price, 4),
+            })
             bankroll.add_exposure(intent.market_id, intent.size_usdc)
             open_positions[intent.market_id] = (intent.price, intent.side,
                                                 intent.size_usdc, event.id)
 
-            # Resolve immediately if the event JSON gave us a resolution.
+            # Resolution priority: live subgraph > JSONL > none.
             resolution = (raw.get("resolutions") or {}).get(intent.market_id)
+            if resolution is None:
+                resolution = live_resolutions.get(intent.market_id)
             next_price = (raw.get("next_prices") or {}).get(intent.market_id)
             exit_price, pnl, label = _settle(intent, resolution, next_price)
             if pnl is not None:
@@ -137,7 +172,8 @@ async def run(path: Path) -> None:
     console.print(table)
     hit_rate = (n_wins / n_trades * 100) if n_trades else 0.0
     console.print(
-        f"\nTrades: {n_trades}  Wins: {n_wins}  Hit-rate: {hit_rate:.1f}%  "
+        f"\nFilled: {n_filled}  Missed: {n_missed}  "
+        f"Trades: {n_trades}  Wins: {n_wins}  Hit-rate: {hit_rate:.1f}%  "
         f"Total PnL: ${total_pnl:+.2f}  Final equity: ${bankroll.equity:.2f}"
     )
 
@@ -168,11 +204,15 @@ def _settle(intent, resolution, next_price):
 def cli() -> None:
     parser = argparse.ArgumentParser(prog="osint-backtest")
     parser.add_argument("events", type=Path, help="Path to JSONL file")
+    parser.add_argument("--no-subgraph", action="store_true",
+                        help="Skip live Polymarket Gamma resolution lookup")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="RNG seed for the fill model")
     args = parser.parse_args()
     if not args.events.exists():
         console.print(f"[red]File not found: {args.events}")
         sys.exit(1)
-    asyncio.run(run(args.events))
+    asyncio.run(run(args.events, use_subgraph_resolutions=not args.no_subgraph, seed=args.seed))
 
 
 def _parse_dt(s: str | None) -> datetime | None:

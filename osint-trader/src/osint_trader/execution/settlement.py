@@ -4,6 +4,10 @@ When a position closes (manually or via PositionManager), realised PnL flows
 back into Bankroll so the daily-loss circuit breaker can actually fire on real
 losses. We also write a `settlements` row so per-source learning can ask
 "did this signal ultimately win?".
+
+In live mode, settle() routes through PolymarketClient.close_position() and
+uses the realised fill_price for PnL. In dry_run/paper modes we use the mark
+price the PositionManager observed.
 """
 from __future__ import annotations
 
@@ -18,9 +22,15 @@ logger = get_logger(__name__)
 
 
 class Settlement:
-    def __init__(self, store: Store, bankroll: Bankroll) -> None:
+    def __init__(
+        self,
+        store: Store,
+        bankroll: Bankroll,
+        polymarket=None,                 # PolymarketClient | None
+    ) -> None:
         self.store = store
         self.bankroll = bankroll
+        self.polymarket = polymarket
 
     async def settle(
         self,
@@ -30,14 +40,13 @@ class Settlement:
         reason: str,
         triggered_by_event_id: str,
     ) -> float:
-        """Record an exit, update bankroll, and persist for learning.
+        # In live mode, post a real closing order and use its realised fill.
+        if self.polymarket is not None and getattr(self.polymarket.settings.trade_mode, "value", "") == "live":
+            close_result = await self.polymarket.close_position(intent, exit_price)
+            if close_result.fill_price is not None:
+                exit_price = close_result.fill_price
+            await self.store.save_trade(close_result, triggered_by_event_id=triggered_by_event_id)
 
-        Realised PnL approximation per $1 of size (limit-order at entry price):
-            shares = size / entry_price
-            payout = shares * exit_price
-            pnl = payout - size
-        For NO side we use (1 - price) as the "cost" of a NO share.
-        """
         size = intent.size_usdc
         if intent.side == "yes":
             shares = size / max(entry_price, 1e-6)

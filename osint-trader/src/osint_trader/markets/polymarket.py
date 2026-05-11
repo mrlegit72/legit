@@ -232,6 +232,53 @@ class PolymarketClient:
         client.set_api_creds(client.create_or_derive_api_creds())
         return bool(client.cancel(order_id))
 
+    async def close_position(self, intent: TradeIntent, exit_price: float) -> TradeResult:
+        """Sell back the outcome token at `exit_price` to flatten the position.
+
+        In dry_run/paper this is a synthetic close. In live mode we post a
+        SELL limit at the requested price.
+        """
+        if self.settings.trade_mode.value == "dry_run":
+            return TradeResult(intent=intent, status="dry_run",
+                               fill_price=exit_price, filled_size_usdc=intent.size_usdc)
+        if self.settings.trade_mode.value == "paper":
+            return TradeResult(intent=intent, status="filled",
+                               fill_price=exit_price, filled_size_usdc=intent.size_usdc,
+                               order_id=f"paper-close-{intent.created_at.isoformat()}")
+        if not intent.token_id:
+            return TradeResult(intent=intent, status="error", error="missing token_id")
+        try:
+            return await asyncio.to_thread(self._close_live, intent, exit_price)
+        except Exception as exc:
+            logger.exception("polymarket_close_failed")
+            return TradeResult(intent=intent, status="error", error=str(exc))
+
+    def _close_live(self, intent: TradeIntent, exit_price: float) -> TradeResult:
+        from py_clob_client.client import ClobClient
+        from py_clob_client.clob_types import OrderArgs
+        from py_clob_client.order_builder.constants import SELL
+
+        client = ClobClient(
+            host=self._clob, key=self.settings.polymarket_private_key,
+            chain_id=137, funder=self.settings.polymarket_funder, signature_type=2,
+        )
+        client.set_api_creds(client.create_or_derive_api_creds())
+        # Sell back the same number of shares we bought.
+        shares = intent.size_usdc / max(intent.price, 0.01)
+        order_args = OrderArgs(
+            price=exit_price, size=shares, side=SELL, token_id=intent.token_id,
+        )
+        signed = client.create_order(order_args)
+        resp = client.post_order(signed)
+        return TradeResult(
+            intent=intent,
+            status="filled" if resp.get("success") else "rejected",
+            order_id=str(resp.get("orderID") or resp.get("orderId") or ""),
+            fill_price=exit_price,
+            filled_size_usdc=shares * exit_price if resp.get("success") else 0.0,
+            error=None if resp.get("success") else str(resp),
+        )
+
 
 def _decode_json_list_floats(val: Any) -> list[float]:
     decoded = _decode_list(val)

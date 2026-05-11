@@ -1,4 +1,4 @@
-"""Telegram alert client (Bot API) with tiered routing.
+"""Telegram alert client (Bot API) with tiered routing + optional digest.
 
 Tiers:
   info       — every analyst signal, even if risk drops it. Useful for tuning.
@@ -6,8 +6,8 @@ Tiers:
   executed   — order outcome (filled/rejected/error/dry_run).
   position   — exits (take_profit/stop_loss/max_hold) with realised PnL.
 
-Alert level filtering is configurable; default is "actionable" which keeps the
-chat quiet enough to actually pay attention to.
+When `digest_window_s > 0`, signal alerts within the window for the same
+market collapse into a single digest message.
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ import httpx
 
 from ..models import NewsEvent, Signal, TradeIntent, TradeResult
 from ..observability import get_logger
+from .digest import AlertDigest
 
 logger = get_logger(__name__)
 
@@ -30,13 +31,17 @@ class TelegramAlerter:
         bot_token: str,
         chat_id: str,
         min_tier: Tier = "actionable",
+        digest_window_s: float = 0.0,
     ) -> None:
         self.bot_token = bot_token
         self.chat_id = chat_id
         self.min_tier = min_tier
         self._http = httpx.AsyncClient(timeout=10)
+        self._digest = AlertDigest(self._send, window_seconds=digest_window_s) if digest_window_s > 0 else None
 
     async def aclose(self) -> None:
+        if self._digest is not None:
+            await self._digest.aclose()
         await self._http.aclose()
 
     @property
@@ -57,6 +62,9 @@ class TelegramAlerter:
     ) -> None:
         tier: Tier = "actionable" if actionable else "info"
         if not self._emits(tier):
+            return
+        if self._digest is not None:
+            self._digest.queue(event, signal, summary, actionable, skip_reason)
             return
         emoji = self._tier_emoji(signal.confidence)
         flag = "" if actionable else f"  _(skipped: `{skip_reason}`)_"
