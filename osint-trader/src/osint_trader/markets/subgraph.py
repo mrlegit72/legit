@@ -72,6 +72,22 @@ async def fetch_price_history(
     return out
 
 
+async def price_at(
+    gamma_host: str, market_id: str, target: datetime, *, fidelity_minutes: int = 60,
+) -> float | None:
+    """Best-effort YES price at (or just after) a target datetime.
+
+    Used by the backtest to compute mark-to-market exits at `event_ts +
+    holding_period` rather than only at final resolution.
+    """
+    history = await fetch_price_history(gamma_host, market_id, fidelity_minutes=fidelity_minutes)
+    if not history:
+        return None
+    after = [t for t in history if t.timestamp >= target]
+    chosen = after[0] if after else history[-1]
+    return chosen.yes_price
+
+
 async def fetch_resolution(gamma_host: str, slug: str) -> int | None:
     """Return the binary YES/NO resolution if the market has resolved, else None."""
     url = f"{gamma_host.rstrip('/')}/markets"

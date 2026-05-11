@@ -1,0 +1,71 @@
+# docker-compose for local / single-host production.
+# Usage:
+#   cp .env.example .env       # set ANTHROPIC_API_KEY at minimum
+#   docker compose up -d
+#   docker compose logs -f trader
+#
+# Services:
+#   trader     osint-trader daemon (metrics on :9108, persistent SQLite volume)
+#   dashboard  FastAPI dashboard on :9109
+#   prometheus on :9090 scraping trader:9108
+#   grafana    on :3000, anonymous viewer enabled, Prometheus datasource preloaded
+
+services:
+  trader:
+    build: .
+    container_name: osint-trader
+    env_file: [.env]
+    environment:
+      DATABASE_URL: "sqlite+aiosqlite:////data/osint_trader.db"
+      METRICS_HOST: "0.0.0.0"
+    volumes:
+      - osint_data:/data
+    ports:
+      - "9108:9108"
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    container_name: osint-dashboard
+    depends_on: [trader]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: "sqlite+aiosqlite:////data/osint_trader.db"
+    command: >
+      sh -c "pip install --no-cache-dir fastapi uvicorn &&
+             uvicorn osint_trader.dashboard.app:app --host 0.0.0.0 --port 9109"
+    volumes:
+      - osint_data:/data
+    ports:
+      - "9109:9109"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: osint-prometheus
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom_data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: osint-grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+volumes:
+  osint_data:
+  prom_data:
+  grafana_data:

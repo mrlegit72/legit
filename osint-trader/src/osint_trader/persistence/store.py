@@ -78,6 +78,23 @@ CREATE TABLE IF NOT EXISTS settlements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_settlements_settled_at ON settlements(settled_at);
+
+CREATE TABLE IF NOT EXISTS kv (
+    key             TEXT PRIMARY KEY,
+    value           TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS condition_index (
+    condition_id    TEXT PRIMARY KEY,
+    market_id       TEXT NOT NULL,
+    slug            TEXT NOT NULL,
+    yes_token_id    TEXT,
+    no_token_id     TEXT,
+    indexed_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_condition_market ON condition_index(market_id);
 """
 
 
@@ -206,6 +223,58 @@ class Store:
             ) as cur:
                 row = await cur.fetchone()
         return float(row[0] if row else 0.0)
+
+    # ---------------- kv (watermarks etc.) ----------------
+
+    async def get_watermark(self, key: str) -> datetime | None:
+        async with aiosqlite.connect(self.path) as db:
+            async with db.execute("SELECT value FROM kv WHERE key = ?", (f"watermark:{key}",)) as cur:
+                row = await cur.fetchone()
+        if row is None:
+            return None
+        try:
+            return datetime.fromisoformat(row[0])
+        except ValueError:
+            return None
+
+    async def set_watermark(self, key: str, ts: datetime) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute(
+                """INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?)
+                   ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+                (f"watermark:{key}", ts.isoformat(), datetime.now(timezone.utc).isoformat()),
+            )
+            await db.commit()
+
+    # ---------------- condition_id index ----------------
+
+    async def upsert_condition(
+        self, *, condition_id: str, market_id: str, slug: str,
+        yes_token_id: str | None, no_token_id: str | None,
+    ) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute(
+                """INSERT INTO condition_index
+                       (condition_id, market_id, slug, yes_token_id, no_token_id, indexed_at)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(condition_id) DO UPDATE SET
+                       market_id=excluded.market_id, slug=excluded.slug,
+                       yes_token_id=excluded.yes_token_id, no_token_id=excluded.no_token_id,
+                       indexed_at=excluded.indexed_at""",
+                (condition_id, market_id, slug, yes_token_id, no_token_id,
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            await db.commit()
+
+    async def market_for_condition(self, condition_id: str) -> tuple[str, str] | None:
+        """Return (market_id, slug) for a condition_id, or None if unknown."""
+        async with aiosqlite.connect(self.path) as db:
+            async with db.execute(
+                "SELECT market_id, slug FROM condition_index WHERE condition_id = ?",
+                (condition_id,),
+            ) as cur:
+                row = await cur.fetchone()
+        return (row[0], row[1]) if row else None
 
     async def source_outcomes(self) -> list[tuple[str, bool]]:
         """Return (source_handle, won) pairs joining settlements ↔ events for credibility learning."""

@@ -1,0 +1,64 @@
+name: osint-tick
+
+# Runs every 10 minutes. GitHub Actions free tier allows 2000 min/month for
+# public repos — at 10-min cadence that's ~2 minutes of compute per tick
+# which is well inside the budget.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}    # also runnable on demand
+
+concurrency:
+  group: osint-tick
+  cancel-in-progress: false   # let an in-flight tick finish; queue the next
+
+permissions:
+  contents: write             # allow the SQLite-back-to-repo step (optional)
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_ALERT_CHAT_ID: ${{ secrets.TELEGRAM_ALERT_CHAT_ID }}
+      TRADE_MODE: dry_run
+      LOG_FORMAT: console
+      LOG_LEVEL: INFO
+      # State store: either commit-back the SQLite (default) or point at Turso.
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        working-directory: osint-trader
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Restore state (artifact)
+        if: env.TURSO_DATABASE_URL == ''
+        uses: actions/cache@v4
+        with:
+          path: osint-trader/osint_trader.db
+          key: osint-state-${{ runner.os }}-v1
+          restore-keys: osint-state-${{ runner.os }}-
+
+      - name: Tick
+        working-directory: osint-trader
+        run: osint-tick --window-min 15
+
+      - name: Save state (artifact)
+        if: env.TURSO_DATABASE_URL == ''
+        uses: actions/cache/save@v4
+        with:
+          path: osint-trader/osint_trader.db
+          key: osint-state-${{ runner.os }}-${{ github.run_id }}

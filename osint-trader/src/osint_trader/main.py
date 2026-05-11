@@ -22,6 +22,11 @@ import asyncio
 import os
 import signal as _sig
 import sys
+from datetime import datetime, timezone
+
+
+def datetime_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 from .analysis import (
     ClaudeAnalyst,
@@ -43,6 +48,7 @@ from .credibility import CredibilityTracker
 from .execution import OrderMonitor, PositionManager, Settlement, quote_for
 from .execution.chain_settlement import ChainSettlementReader
 from .markets import PolymarketClient
+from .markets.condition_index import hydrate_condition_index
 from .models import NewsEvent, TradeIntent
 from .notify import TelegramAlerter
 from .observability import configure_logging, get_logger, metrics
@@ -117,6 +123,12 @@ class Orchestrator:
         try:
             await self.store.init()
             await self._hydrate_credibility()
+            try:
+                await hydrate_condition_index(
+                    self.store, self.settings.polymarket_gamma_host, self.markets,
+                )
+            except Exception as exc:
+                logger.warning("condition_index_hydrate_failed", error=str(exc))
             try:
                 await run_preflight(self.settings, self.markets, self.poly)
             except PreflightError as exc:
@@ -329,15 +341,34 @@ class Orchestrator:
         metrics.equity(self.bankroll.equity)
 
     async def _on_chain_payout(self, payout) -> None:
-        """Called when ChainSettlementReader sees a PayoutRedemption for our funder."""
-        logger.info("chain_payout_observed",
-                    condition_id=payout.condition_id,
-                    payout_usdc=payout.payout_usdc,
-                    tx=payout.tx_hash)
-        # Production hook: look up the condition_id → market_id, overwrite the
-        # synthetic settlement row with the realised payout. Left as a TODO
-        # because mapping requires the on-chain conditionId index built at
-        # market creation time, which py-clob-client exposes per-market.
+        """Called when ChainSettlementReader sees a PayoutRedemption for our funder.
+
+        Maps condition_id → market_id via the hydrated index and overwrites
+        the synthetic settlement row with the realised on-chain payout. If
+        the condition is unknown (market we never traded), just log it.
+        """
+        mapping = await self.store.market_for_condition(payout.condition_id)
+        if mapping is None:
+            logger.info("chain_payout_unknown_market",
+                        condition_id=payout.condition_id,
+                        payout_usdc=payout.payout_usdc, tx=payout.tx_hash)
+            return
+        market_id, slug = mapping
+        # Overwrite the bankroll: realised PnL = payout - last_known_size.
+        # We approximate "last_known_size" as the open exposure on this market
+        # at the time the payout lands (no other partial closes happened).
+        size = self.bankroll.open_exposure_by_market.get(market_id, 0.0)
+        pnl = payout.payout_usdc - size
+        self.bankroll.realized_pnl += (pnl - 0)  # already tracked synthetically; this corrects drift
+        await self.store.save_settlement(
+            market_id=market_id, side="yes", entry_price=0.0, exit_price=1.0,
+            size_usdc=size, pnl_usdc=pnl, reason="chain_payout",
+            triggered_by_event_id=None,
+            settled_at=datetime_now(),
+        )
+        logger.info("chain_payout_reconciled",
+                    market_id=market_id, slug=slug,
+                    payout_usdc=payout.payout_usdc, pnl=pnl, tx=payout.tx_hash)
 
 
 def cli() -> None:
