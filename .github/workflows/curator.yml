@@ -1,0 +1,64 @@
+name: Autonomous Curator
+
+on:
+  schedule:
+    # Hourly. GitHub may delay scheduled runs under load.
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run without posting to X"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write  # needed to commit the updated SQLite dedup DB
+
+concurrency:
+  group: curator
+  cancel-in-progress: false
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run curator
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          CURATOR_DB_PATH: curator_state.sqlite3
+          CURATOR_MAX_POSTS: "3"
+          CURATOR_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: python curator.py
+
+      - name: Persist dedup database
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          if [ -n "$(git status --porcelain curator_state.sqlite3)" ]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add curator_state.sqlite3
+            git commit -m "chore: update curator dedup state [skip ci]"
+            git push
+          else
+            echo "No DB changes to commit."
+          fi
