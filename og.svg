@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0d12"/>
+      <stop offset="1" stop-color="#1a1b2f"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0.85" cy="0.1" r="0.6">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#7c5cff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0.15" cy="0.85" r="0.6">
+      <stop offset="0" stop-color="#19c2c6" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#19c2c6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c5cff"/>
+      <stop offset="1" stop-color="#19c2c6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow1)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+  <g transform="translate(80, 90)">
+    <rect width="64" height="64" rx="18" fill="url(#wave)"/>
+    <path d="M14 32 L20 32 L26 14 L34 50 L42 22 L48 38 L54 28 L60 28" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  <text x="170" y="138" font-family="Inter, system-ui, sans-serif" font-size="34" font-weight="700" fill="#e7ecf3">Tone Generator</text>
+  <text x="80" y="290" font-family="Inter, system-ui, sans-serif" font-size="78" font-weight="800" fill="#ffffff" letter-spacing="-2">A tone generator</text>
+  <text x="80" y="380" font-family="Inter, system-ui, sans-serif" font-size="78" font-weight="800" fill="#ffffff" letter-spacing="-2">that actually works.</text>
+  <text x="80" y="450" font-family="Inter, system-ui, sans-serif" font-size="28" fill="#8a93a6">Pure tones · noise · sweeps · binaural · tuner · ABX</text>
+  <g transform="translate(80, 510)">
+    <rect width="240" height="42" rx="21" fill="rgba(124,92,255,0.18)" stroke="#7c5cff" stroke-opacity="0.5"/>
+    <text x="120" y="28" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="600" text-anchor="middle" fill="#7c5cff">Runs in your browser</text>
+    <rect x="260" width="180" height="42" rx="21" fill="rgba(25,194,198,0.18)" stroke="#19c2c6" stroke-opacity="0.5"/>
+    <text x="350" y="28" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="600" text-anchor="middle" fill="#19c2c6">No tracking</text>
+  </g>
+  <path d="M650 315 Q700 215, 750 315 T850 315 T950 315 T1050 315 T1150 315" stroke="url(#wave)" stroke-width="5" fill="none" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,17 @@
+{
+  "name": "Tone Generator",
+  "short_name": "Tones",
+  "description": "Pure tones, noise, sweeps, binaural, tuner & ABX — runs in your browser.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;utf8,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 192 192%22%3E%3Crect width%3D%22192%22 height%3D%22192%22 rx%3D%2240%22 fill%3D%22%237c5cff%22%2F%3E%3Cpath d%3D%22M24 96 L40 96 L56 40 L80 152 L104 56 L120 112 L136 80 L168 80%22 stroke%3D%22white%22 stroke-width%3D%2210%22 stroke-linecap%3D%22round%22 stroke-linejoin%3D%22round%22 fill%3D%22none%22%2F%3E%3C%2Fsvg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
