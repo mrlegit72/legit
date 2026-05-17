@@ -86,7 +86,7 @@
   .freq-display .unit { font-size: 0.35em; color: var(--muted); margin-left: 8px; -webkit-text-fill-color: var(--muted); }
   .freq-sub { color: var(--muted); font-size: 14px; margin-top: 8px; }
   .visualizer { width: 100%; height: 80px; margin: 18px 0 24px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--line); }
-  .yn-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .yn-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .yn-buttons .btn { padding: 18px; font-size: 16px; }
   .replay-row { display: flex; justify-content: center; margin-top: 12px; }
   .progress { width: 100%; height: 6px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin-top: 6px; }
@@ -134,6 +134,7 @@
   <nav class="top-nav">
     <a href="/">Generator</a>
     <a href="/hearing-test.html" style="color: var(--text);">Hearing Test</a>
+    <a href="/beat-maker.html">Beat Maker</a>
   </nav>
 </header>
 
@@ -173,17 +174,14 @@
     <div class="card stack">
       <h2 style="margin: 0; font-size: 22px;">First — is your left actually left?</h2>
       <p style="color: var(--muted); margin: 0;">We'll play a tone in only one channel. Tell us which side you heard it on. If it's swapped, swap your headphones before continuing.</p>
-
       <div style="text-align: center; padding: 24px 0;">
         <button class="btn primary lg" id="btn-play-lr">▶ Play test tone</button>
         <div id="lr-prompt" style="color: var(--muted); margin-top: 18px; min-height: 22px;"></div>
       </div>
-
       <div class="lr-buttons" id="lr-answer" style="display: none;">
         <button class="btn" data-lr="left">I heard it on the LEFT</button>
         <button class="btn" data-lr="right">I heard it on the RIGHT</button>
       </div>
-
       <div class="row between" style="margin-top: 8px;">
         <button class="btn ghost" id="btn-lr-back">← Back</button>
         <button class="btn" id="btn-lr-skip">Skip channel check →</button>
@@ -194,12 +192,10 @@
   <section id="step-calib" class="step">
     <div class="card stack">
       <h2 style="margin: 0; font-size: 22px;">Set a comfortable volume</h2>
-      <p style="color: var(--muted); margin: 0;">A 1 kHz tone will play continuously. Adjust your system volume until it sounds clear but quiet — like a calm conversation, not loud music. The test plays softer tones from here on, so set this comfortable, not loud.</p>
-
+      <p style="color: var(--muted); margin: 0;">A 1 kHz tone will play continuously. Adjust your system volume until it sounds clear but quiet — like a calm conversation, not loud music.</p>
       <div style="text-align: center; padding: 16px 0;">
         <button class="btn primary lg" id="btn-calib-play">▶ Play 1 kHz reference</button>
       </div>
-
       <div class="row between" style="margin-top: 8px;">
         <button class="btn ghost" id="btn-calib-back">← Back</button>
         <button class="btn primary" id="btn-calib-done">Volume is set — start test →</button>
@@ -215,7 +211,6 @@
         <div class="freq-sub" id="freq-sub">Listen carefully…</div>
         <canvas class="visualizer" id="viz" width="800" height="80"></canvas>
       </div>
-
       <div class="yn-buttons">
         <button class="btn danger" id="btn-no">✕ I can't hear it</button>
         <button class="btn success" id="btn-yes">✓ I hear it</button>
@@ -223,7 +218,6 @@
       <div class="replay-row">
         <button class="btn ghost" id="btn-replay">↻ Play again</button>
       </div>
-
       <div style="margin-top: 22px;">
         <div class="progress"><div class="fill" id="progress-fill"></div></div>
         <div class="progress-meta">
@@ -231,7 +225,6 @@
           <span id="progress-pct">0%</span>
         </div>
       </div>
-
       <div class="row between" style="margin-top: 18px;">
         <button class="btn ghost" id="btn-quit">Quit test</button>
       </div>
@@ -244,35 +237,27 @@
         <div class="big-number"><span id="max-freq">—</span> <span style="font-size: 0.45em; color: var(--muted);">kHz</span></div>
         <div class="label">Your highest reliably-heard frequency</div>
       </div>
-
       <div class="age-banner">
         <div class="age-range" id="age-range">—</div>
         <div class="age-sub" id="age-sub">Estimated auditory age band, based on typical presbycusis curves.</div>
       </div>
-
       <canvas id="audiogram" width="800" height="280"></canvas>
-
       <div class="stat-grid" id="stat-grid"></div>
-
       <div class="interpretation" id="interpretation"></div>
-
       <div class="actions-row">
         <button class="btn primary" id="btn-save">💾 Save this result</button>
         <button class="btn" id="btn-share">↗ Copy shareable link</button>
         <button class="btn" id="btn-retake">↻ Retake test</button>
         <a href="/" class="btn ghost">← Back to generator</a>
       </div>
-
-      <p class="disclaimer">
-        This isn't a clinical hearing test. Browser audio can't be calibrated to real-world SPL, and your headphones, ambient noise, and system settings all affect the result. If you're concerned about your hearing, see an audiologist.
-      </p>
+      <p class="disclaimer">This isn't a clinical hearing test. Browser audio can't be calibrated to real-world SPL, and your headphones, ambient noise, and system settings all affect the result. If you're concerned about your hearing, see an audiologist.</p>
     </div>
   </section>
 
 </main>
 
 <footer>
-  <a href="/">← Tone Generator</a> · runs in your browser · no tracking · no audio leaves your device
+  <a href="/">← Tone Generator</a> · <a href="/beat-maker.html">Beat Maker</a> · runs in your browser · no tracking · no audio leaves your device
 </footer>
 
 <div class="toast" id="toast">Saved.</div>
@@ -393,12 +378,8 @@
   document.querySelectorAll('[data-lr]').forEach(b => b.addEventListener('click', (e) => {
     const choice = e.currentTarget.dataset.lr;
     if (!lrExpected) return;
-    if (choice === lrExpected) {
-      toast('Channels look right ✓');
-      setTimeout(() => show('step-calib'), 600);
-    } else {
-      toast('Channels swapped — flip your headphones around.');
-    }
+    if (choice === lrExpected) { toast('Channels look right ✓'); setTimeout(() => show('step-calib'), 600); }
+    else { toast('Channels swapped — flip your headphones around.'); }
     $('lr-answer').style.display = 'none';
     $('lr-prompt').textContent = '';
   }));
@@ -509,40 +490,31 @@
     ctx.textAlign = 'right';
     ctx.fillText('Heard', padL - 10, padT + plotH * 0.25 + 4);
     ctx.fillText('Missed', padL - 10, padT + plotH * 0.75 + 4);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#8a93a6';
-    ctx.fillText('Frequency (Hz)', padL + plotW/2, h - 2);
     const refs = [
       { age: 20, color: 'rgba(124,92,255,0.4)', maxF: 20000 },
       { age: 40, color: 'rgba(25,194,198,0.35)', maxF: 16000 },
       { age: 60, color: 'rgba(245,158,11,0.35)', maxF: 11000 },
     ];
     refs.forEach(r => {
-      ctx.strokeStyle = r.color;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = r.color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(xLog(fMin), padT + plotH * 0.25);
       ctx.lineTo(xLog(r.maxF), padT + plotH * 0.25);
       ctx.lineTo(xLog(r.maxF), padT + plotH * 0.75);
       ctx.lineTo(xLog(fMax), padT + plotH * 0.75);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = r.color.replace(/[\d.]+\)$/, '0.9)');
-      ctx.font = '10.5px Inter';
-      ctx.textAlign = 'left';
+      ctx.font = '10.5px Inter'; ctx.textAlign = 'left';
       ctx.fillText('age ~' + r.age, xLog(r.maxF) + 4, padT + plotH * 0.25 - 4);
     });
     state.answers.forEach(a => {
       const x = xLog(a.freq); const y = yPos(a.heard);
-      ctx.beginPath();
-      ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(x, y, 5.5, 0, Math.PI * 2);
       ctx.fillStyle = a.heard ? '#22c55e' : '#ef4444';
       ctx.shadowColor = a.heard ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)';
       ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
     });
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
     ctx.beginPath();
     state.answers.forEach((a, i) => {
       const x = xLog(a.freq); const y = yPos(a.heard);
@@ -562,8 +534,7 @@
       { k: 'Test duration', v: Math.round((state.finished - state.started)/1000) + 's' },
     ];
     items.forEach(i => {
-      const div = document.createElement('div');
-      div.className = 'stat';
+      const div = document.createElement('div'); div.className = 'stat';
       div.innerHTML = '<div class="k">' + i.k + '</div><div class="v">' + i.v + '</div>';
       grid.appendChild(div);
     });
@@ -573,28 +544,23 @@
     const lowMisses = state.answers.filter(a => a.freq < 500 && !a.heard);
     if (lowMisses.length) {
       const n = document.createElement('div'); n.className = 'note warn';
-      n.innerHTML = '<strong>Low-frequency tones were missed.</strong> Built-in laptop speakers and many cheap earbuds cannot reproduce frequencies below ~200 Hz. This is almost certainly equipment, not hearing. Retake with quality headphones if you want a clean read.';
+      n.innerHTML = '<strong>Low-frequency tones were missed.</strong> Built-in laptop speakers and many cheap earbuds cannot reproduce frequencies below ~200 Hz. This is almost certainly equipment, not hearing.';
       wrap.appendChild(n);
     }
-    const heardAt2k = state.answers.find(a => a.freq === 2000)?.heard;
     const heardAt4k = state.answers.find(a => a.freq === 4000)?.heard;
+    const heardAt2k = state.answers.find(a => a.freq === 2000)?.heard;
     const heardAt8k = state.answers.find(a => a.freq === 8000)?.heard;
     if (heardAt2k === true && heardAt4k === false && heardAt8k === true) {
       const n = document.createElement('div'); n.className = 'note warn';
-      n.innerHTML = '<strong>You missed 4 kHz but heard the neighbors.</strong> A specific dip at 3–6 kHz is the signature of noise-induced hearing loss — concerts, power tools, gunfire, headphones cranked too high. The dip rarely recovers, so it is a useful flag if it shows up here.';
+      n.innerHTML = '<strong>You missed 4 kHz but heard the neighbors.</strong> A specific dip at 3–6 kHz is the signature of noise-induced hearing loss.';
       wrap.appendChild(n);
     }
     let n = document.createElement('div'); n.className = 'note';
-    if (maxF >= 17000) n.innerHTML = '<strong>Your top end is intact.</strong> Hearing tones above 17 kHz means your high-frequency cilia haven’t suffered the typical age-related loss yet. This range is musically subtle (it carries cymbal sheen and consonant detail), but losing it is one of the earliest signs of presbycusis.';
-    else if (maxF >= 13000) n.innerHTML = '<strong>Normal adult range.</strong> Most adults stop hearing above 13–17 kHz by their thirties. Your hearing for speech (250 Hz – 8 kHz) is what matters most for daily life, and it is fine.';
-    else if (maxF >= 8000) n.innerHTML = '<strong>Moderate high-frequency rolloff.</strong> You are missing the highest octave of human hearing. You would notice this when a cymbal sounds dull or when you cannot quite catch the difference between "f" and "s" in a noisy room. Often this is age, sometimes noise exposure.';
-    else n.innerHTML = '<strong>Significant loss in the speech range.</strong> Missing tones below 8 kHz can affect speech intelligibility, especially in noisy environments. If you did not have a clear equipment issue (like laptop speakers), this is worth raising with an audiologist.';
+    if (maxF >= 17000) n.innerHTML = '<strong>Your top end is intact.</strong> Hearing tones above 17 kHz means your high-frequency cilia haven\'t suffered typical age-related loss yet.';
+    else if (maxF >= 13000) n.innerHTML = '<strong>Normal adult range.</strong> Most adults stop hearing above 13–17 kHz by their thirties.';
+    else if (maxF >= 8000) n.innerHTML = '<strong>Moderate high-frequency rolloff.</strong> You are missing the highest octave of human hearing.';
+    else n.innerHTML = '<strong>Significant loss in the speech range.</strong> Missing tones below 8 kHz can affect speech intelligibility.';
     wrap.appendChild(n);
-    if (maxF >= 17000) {
-      const n2 = document.createElement('div'); n2.className = 'note';
-      n2.innerHTML = '<em>Fun fact:</em> 17 kHz is the "mosquito tone" used by some shops to deter loitering teenagers — it is audible to most under-25s and inaudible to most over-30s. You can hear it.';
-      wrap.appendChild(n2);
-    }
   }
 
   $('btn-save').addEventListener('click', () => {
@@ -610,7 +576,7 @@
   $('btn-share').addEventListener('click', () => {
     const bits = state.answers.map(a => a.heard ? '1' : '0').join('');
     const url = location.origin + location.pathname + '?r=' + bits;
-    navigator.clipboard.writeText(url).then(() => toast('Link copied — paste anywhere to share.')).catch(() => prompt('Copy this link:', url));
+    navigator.clipboard.writeText(url).then(() => toast('Link copied!')).catch(() => prompt('Copy this link:', url));
   });
   $('btn-retake').addEventListener('click', () => show('step-intro'));
 
