@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Metronome – Tone Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d12;--bg2:#0f131b;--panel:#141923;--panel2:#1a2030;
+  --line:#232a3a;--line2:#2d3548;--text:#e7ecf3;--muted:#8a93a6;
+  --accent:#7c5cff;--accent2:#19c2c6;--good:#22c55e;--warn:#f59e0b;
+  --bad:#ef4444;--r:10px
+}
+body{
+  font-family:'Inter',sans-serif;color:var(--text);min-height:100vh;
+  background:radial-gradient(1200px 600px at 90% -10%,rgba(124,92,255,.18),transparent 60%),
+    radial-gradient(900px 500px at -10% 10%,rgba(25,194,198,.14),transparent 60%),
+    linear-gradient(180deg,var(--bg),var(--bg2));
+}
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+select{font-family:'Inter',sans-serif}
+input[type=range]{cursor:pointer}
+
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--panel2);border:1px solid var(--line2);border-radius:8px;
+  padding:10px 20px;font-size:13.5px;color:var(--text);
+  transition:transform .3s ease;z-index:999;pointer-events:none;white-space:nowrap;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+.main-wrap{max-width:1200px;margin:0 auto;padding:0 20px 0}
+
+.bpm-display{
+  font-family:'JetBrains Mono',monospace;
+  font-size:clamp(80px,14vw,140px);
+  font-weight:700;line-height:1;
+  background:linear-gradient(135deg,var(--text),var(--muted));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  transition:filter .05s;user-select:none;
+}
+.bpm-display.flash{filter:drop-shadow(0 0 20px var(--accent))}
+.bpm-display.flash-accent{filter:drop-shadow(0 0 20px var(--accent2))}
+
+.beat-num{
+  font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:600;
+  color:var(--muted);transition:color .05s,transform .05s;
+}
+.beat-num.active{color:var(--accent);transform:scale(1.3)}
+.beat-num.accent-beat{color:var(--accent2)}
+
+.slider-row{display:flex;align-items:center;gap:14px;width:100%}
+.slider-row input[type=range]{
+  flex:1;height:6px;border-radius:3px;
+  accent-color:var(--accent);background:var(--line2);
+}
+.nudge-btn{
+  background:var(--panel);border:1px solid var(--line2);
+  border-radius:7px;color:var(--muted);padding:6px 12px;
+  font-size:13px;transition:all .15s;
+}
+.nudge-btn:hover{background:var(--line2);color:var(--text)}
+
+.sel-btn{
+  background:var(--panel);border:1px solid var(--line2);
+  border-radius:8px;color:var(--muted);padding:8px 14px;
+  font-size:13px;transition:all .15s;
+}
+.sel-btn:hover{background:var(--line);color:var(--text)}
+.sel-btn.active{background:rgba(124,92,255,.2);border-color:var(--accent);color:var(--accent)}
+
+.start-btn{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;border-radius:12px;color:#fff;
+  font-size:18px;font-weight:600;padding:16px 48px;
+  box-shadow:0 4px 20px rgba(124,92,255,.4);
+  transition:all .2s;letter-spacing:.5px;
+}
+.start-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(124,92,255,.5)}
+.start-btn.running{background:linear-gradient(135deg,#ef4444,#dc2626)}
+
+.tap-btn{
+  background:var(--panel);border:2px solid var(--line2);
+  border-radius:12px;color:var(--text);font-size:15px;font-weight:600;
+  padding:14px 28px;transition:all .15s;
+}
+.tap-btn:hover{background:var(--line2)}
+.tap-btn:active{transform:scale(0.97);background:rgba(124,92,255,.15);border-color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header class="site" style="max-width:1200px;margin:0 auto;padding:16px 20px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+  <a class="brand" href="/" style="display:inline-flex;align-items:center;gap:10px;font-weight:700;color:var(--text);text-decoration:none">
+    <span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;box-shadow:0 4px 16px rgba(124,92,255,.35)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M3 12h2l2-6 3 12 3-9 2 6 2-3h4"/></svg>
+    </span>
+    <span>Tone Generator</span>
+  </a>
+  <nav style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <a href="/" style="color:var(--muted);font-size:13.5px;text-decoration:none">Generator</a>
+    <a href="/hearing-test.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Hearing Test</a>
+    <a href="/beat-maker.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Studio</a>
+    <a href="/chord-builder.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Chords</a>
+    <a href="/metronome.html" style="color:var(--text);font-size:13.5px;text-decoration:none">Metronome</a>
+    <a href="/ear-training.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Ear Training</a>
+    <a href="/noise-machine.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Focus</a>
+    <a href="/spectrogram.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Spectrogram</a>
+  </nav>
+</header>
+
+<div class="main-wrap">
+  <div style="padding:32px 0 16px;text-align:center">
+    <h1 style="font-size:clamp(20px,3vw,26px);font-weight:600;margin-bottom:6px">Metronome</h1>
+    <p style="color:var(--muted);font-size:14px">Precision scheduling · Space to start/stop</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr minmax(260px,340px);gap:20px;align-items:start">
+
+    <!-- Left column -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- BPM card -->
+      <div class="card" style="padding:32px;text-align:center">
+        <div id="bpmDisplay" class="bpm-display">120</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:4px;font-family:'JetBrains Mono',monospace">BPM</div>
+
+        <div class="slider-row" style="margin:24px 0 16px">
+          <button class="nudge-btn" onclick="nudgeBpm(-10)">-10</button>
+          <button class="nudge-btn" onclick="nudgeBpm(-1)">-1</button>
+          <input type="range" id="bpmSlider" min="20" max="300" value="120" oninput="setBpm(+this.value)">
+          <button class="nudge-btn" onclick="nudgeBpm(1)">+1</button>
+          <button class="nudge-btn" onclick="nudgeBpm(10)">+10</button>
+        </div>
+
+        <!-- Beat dots -->
+        <div id="beatDots" style="display:flex;justify-content:center;gap:12px;margin:20px 0"></div>
+
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px">
+          <button class="tap-btn" onclick="tapTempo()">Tap Tempo</button>
+          <button class="start-btn" id="startBtn" onclick="togglePlay()">Start</button>
+        </div>
+      </div>
+
+      <!-- Controls card -->
+      <div class="card" style="padding:24px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+          <!-- Time sig -->
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.8px">Time Signature</div>
+            <div style="display:flex;flex-direction:column;gap:6px" id="timeSigBtns">
+              <button class="sel-btn active" onclick="setTimeSig(4,4,this)">4/4</button>
+              <button class="sel-btn" onclick="setTimeSig(3,4,this)">3/4</button>
+              <button class="sel-btn" onclick="setTimeSig(2,4,this)">2/4</button>
+              <button class="sel-btn" onclick="setTimeSig(5,4,this)">5/4</button>
+              <button class="sel-btn" onclick="setTimeSig(6,8,this)">6/8</button>
+              <button class="sel-btn" onclick="setTimeSig(7,8,this)">7/8</button>
+            </div>
+          </div>
+
+          <!-- Subdivision -->
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.8px">Subdivision</div>
+            <div style="display:flex;flex-direction:column;gap:6px" id="subdivBtns">
+              <button class="sel-btn active" onclick="setSubdiv(1,this)">Quarter</button>
+              <button class="sel-btn" onclick="setSubdiv(2,this)">Eighth</button>
+              <button class="sel-btn" onclick="setSubdiv(4,this)">Sixteenth</button>
+              <button class="sel-btn" onclick="setSubdiv(3,this)">Triplet</button>
+            </div>
+          </div>
+
+          <!-- Sound -->
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.8px">Beat Sound</div>
+            <div style="display:flex;flex-direction:column;gap:6px" id="soundBtns">
+              <button class="sel-btn active" onclick="setSound('click',this)">Click</button>
+              <button class="sel-btn" onclick="setSound('beep',this)">Beep</button>
+              <button class="sel-btn" onclick="setSound('wood',this)">Woodblock</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right column: pendulum -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card" style="padding:24px;display:flex;flex-direction:column;align-items:center">
+        <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px">Visual</div>
+        <svg id="pendulumSvg" viewBox="0 0 200 260" width="200" height="260" style="display:block">
+          <defs>
+            <radialGradient id="bobGrad" cx="40%" cy="35%">
+              <stop offset="0%" stop-color="#a48dff"/>
+              <stop offset="100%" stop-color="#7c5cff"/>
+            </radialGradient>
+          </defs>
+          <!-- Pivot -->
+          <circle cx="100" cy="30" r="6" fill="var(--line2)"/>
+          <!-- Rod + bob group -->
+          <g id="pendulumArm" style="transform-origin:100px 30px;transform:rotate(0deg)">
+            <line x1="100" y1="30" x2="100" y2="210" stroke="var(--line2)" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="100" cy="215" r="22" fill="url(#bobGrad)" id="pendulumBob"/>
+          </g>
+          <!-- Tick marks -->
+          <line x1="40" y1="30" x2="40" y2="50" stroke="var(--line)" stroke-width="1"/>
+          <line x1="160" y1="30" x2="160" y2="50" stroke="var(--line)" stroke-width="1"/>
+          <line x1="20" y1="30" x2="20" y2="40" stroke="var(--line)" stroke-width="1"/>
+          <line x1="180" y1="30" x2="180" y2="40" stroke="var(--line)" stroke-width="1"/>
+          <!-- Arc guide -->
+          <path d="M 30 80 Q 100 140 170 80" fill="none" stroke="var(--line)" stroke-width="1" stroke-dasharray="3,4"/>
+        </svg>
+
+        <div style="margin-top:16px;text-align:center">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Current Beat</div>
+          <div id="currentBeat" style="font-family:'JetBrains Mono',monospace;font-size:48px;font-weight:700;color:var(--accent);min-width:60px;display:inline-block">–</div>
+        </div>
+      </div>
+
+      <!-- Tap tempo info -->
+      <div class="card" style="padding:20px">
+        <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">Tap Info</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="background:rgba(124,92,255,.08);border:1px solid rgba(124,92,255,.2);border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Interval</div>
+            <div id="tapInterval" style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:var(--text)">–</div>
+          </div>
+          <div style="background:rgba(25,194,198,.08);border:1px solid rgba(25,194,198,.2);border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Taps used</div>
+            <div id="tapCount" style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:var(--text)">0</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6">
+          Tap at least 3 times to detect tempo. Last 6 taps are averaged.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<footer style="max-width:1200px;margin:40px auto 24px;padding:0 20px;color:var(--muted);font-size:12.5px;text-align:center">
+  Runs in your browser · No uploads · No tracking
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+let bpm = 120;
+let beatsPerMeasure = 4;
+let beatDenom = 4;
+let subdivision = 1;
+let soundType = 'click';
+let isPlaying = false;
+let currentBeat = 0;
+let currentSubbeat = 0;
+
+let nextNoteTime = 0;
+let schedulerInterval = null;
+const lookahead = 0.1;
+const scheduleAhead = 0.2;
+
+let pendulumDir = 1;
+let pendulumAngle = 0;
+let animFrame = null;
+let lastBeatTime = 0;
+let beatDuration = 0.5;
+
+let tapTimes = [];
+
+function toast(msg, dur=2200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function setBpm(v) {
+  bpm = Math.min(300, Math.max(20, v));
+  document.getElementById('bpmSlider').value = bpm;
+  document.getElementById('bpmDisplay').textContent = bpm;
+  beatDuration = 60 / bpm;
+}
+
+function nudgeBpm(d) { setBpm(bpm + d); }
+
+function setTimeSig(n, d, btn) {
+  beatsPerMeasure = n;
+  beatDenom = d;
+  currentBeat = 0;
+  document.querySelectorAll('#timeSigBtns .sel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildBeatDots();
+}
+
+function setSubdiv(n, btn) {
+  subdivision = n;
+  document.querySelectorAll('#subdivBtns .sel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function setSound(s, btn) {
+  soundType = s;
+  document.querySelectorAll('#soundBtns .sel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function buildBeatDots() {
+  const c = document.getElementById('beatDots');
+  c.innerHTML = '';
+  for (let i = 0; i < beatsPerMeasure; i++) {
+    const d = document.createElement('div');
+    d.className = 'beat-num';
+    d.id = 'dot' + i;
+    d.textContent = i + 1;
+    c.appendChild(d);
+  }
+}
+buildBeatDots();
+
+function playClick(time, isAccent, isSubdiv) {
+  const vol = isAccent ? 0.9 : isSubdiv ? 0.4 : 0.7;
+  if (soundType === 'click') {
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.006));
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(vol, time);
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = isAccent ? 2200 : 1400;
+    f.Q.value = 0.8;
+    src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+    src.start(time); src.stop(time + 0.05);
+  } else if (soundType === 'beep') {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.frequency.value = isAccent ? 1320 : isSubdiv ? 660 : 880;
+    osc.type = 'sine';
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(vol * 0.5, time + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.001, time + (isSubdiv ? 0.04 : 0.07));
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(time); osc.stop(time + 0.08);
+  } else {
+    // Woodblock
+    const osc = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    const freq = isAccent ? 880 : isSubdiv ? 440 : 660;
+    osc.frequency.value = freq;
+    osc2.frequency.value = freq * 1.5;
+    osc.type = 'square'; osc2.type = 'square';
+    g.gain.setValueAtTime(vol * 0.3, time);
+    g.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
+    osc.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
+    osc.start(time); osc.stop(time + 0.07);
+    osc2.start(time); osc2.stop(time + 0.07);
+  }
+}
+
+function scheduler() {
+  while (nextNoteTime < audioCtx.currentTime + scheduleAhead) {
+    const isMainBeat = (currentSubbeat % subdivision === 0);
+    const beatIndex = isMainBeat ? currentBeat : -1;
+    const isAccent = isMainBeat && currentBeat === 0;
+    const isSubdivNote = !isMainBeat;
+    playClick(nextNoteTime, isAccent, isSubdivNote);
+
+    if (isMainBeat) {
+      const bt = beatIndex;
+      const t = nextNoteTime;
+      setTimeout(() => {
+        if (!isPlaying) return;
+        const disp = document.getElementById('bpmDisplay');
+        disp.classList.add(bt === 0 ? 'flash-accent' : 'flash');
+        setTimeout(() => { disp.classList.remove('flash'); disp.classList.remove('flash-accent'); }, 80);
+        document.getElementById('currentBeat').textContent = bt + 1;
+        for (let i = 0; i < beatsPerMeasure; i++) {
+          const dot = document.getElementById('dot' + i);
+          if (dot) dot.classList.remove('active', 'accent-beat');
+        }
+        const dot = document.getElementById('dot' + bt);
+        if (dot) { dot.classList.add('active'); if (bt === 0) dot.classList.add('accent-beat'); }
+        lastBeatTime = performance.now() / 1000;
+        pendulumDir = bt % 2 === 0 ? 1 : -1;
+      }, Math.max(0, (nextNoteTime - audioCtx.currentTime) * 1000));
+    }
+
+    const subdivDuration = (60 / bpm) / subdivision;
+    nextNoteTime += subdivDuration;
+    currentSubbeat++;
+    if (currentSubbeat >= subdivision) {
+      currentSubbeat = 0;
+      currentBeat = (currentBeat + 1) % beatsPerMeasure;
+    }
+  }
+}
+
+function animatePendulum() {
+  if (!isPlaying) return;
+  const now = performance.now() / 1000;
+  const period = (60 / bpm) * 2 * beatsPerMeasure;
+  const elapsed = now - lastBeatTime;
+  const frac = Math.min(elapsed / (60 / bpm), 1);
+  const targetAngle = pendulumDir * 35;
+  const prevAngle = -pendulumDir * 35;
+  pendulumAngle = prevAngle + (targetAngle - prevAngle) * Math.sin(frac * Math.PI / 2);
+  document.getElementById('pendulumArm').style.transform = `rotate(${pendulumAngle}deg)`;
+  animFrame = requestAnimationFrame(animatePendulum);
+}
+
+function togglePlay() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  isPlaying = !isPlaying;
+  const btn = document.getElementById('startBtn');
+  if (isPlaying) {
+    currentBeat = 0; currentSubbeat = 0;
+    nextNoteTime = audioCtx.currentTime + 0.05;
+    schedulerInterval = setInterval(scheduler, 25);
+    animatePendulum();
+    btn.textContent = 'Stop';
+    btn.classList.add('running');
+    toast('Metronome started — Space to stop');
+  } else {
+    clearInterval(schedulerInterval);
+    cancelAnimationFrame(animFrame);
+    document.getElementById('pendulumArm').style.transform = 'rotate(0deg)';
+    document.getElementById('currentBeat').textContent = '–';
+    for (let i = 0; i < beatsPerMeasure; i++) {
+      const d = document.getElementById('dot' + i);
+      if (d) d.classList.remove('active','accent-beat');
+    }
+    btn.textContent = 'Start';
+    btn.classList.remove('running');
+  }
+}
+
+function tapTempo() {
+  const now = performance.now();
+  tapTimes.push(now);
+  if (tapTimes.length > 6) tapTimes.shift();
+  document.getElementById('tapCount').textContent = tapTimes.length;
+  if (tapTimes.length < 2) return;
+  const intervals = [];
+  for (let i = 1; i < tapTimes.length; i++) intervals.push(tapTimes[i] - tapTimes[i-1]);
+  const avg = intervals.reduce((a,b) => a+b, 0) / intervals.length;
+  document.getElementById('tapInterval').textContent = Math.round(avg) + 'ms';
+  if (tapTimes.length >= 2) {
+    const newBpm = Math.round(60000 / avg);
+    setBpm(newBpm);
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && e.target === document.body) {
+    e.preventDefault();
+    togglePlay();
+  }
+});
+
+setBpm(120);
+</script>
+</body>
+</html>

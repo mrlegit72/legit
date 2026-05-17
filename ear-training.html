@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ear Training – Tone Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d12;--bg2:#0f131b;--panel:#141923;--panel2:#1a2030;
+  --line:#232a3a;--line2:#2d3548;--text:#e7ecf3;--muted:#8a93a6;
+  --accent:#7c5cff;--accent2:#19c2c6;--good:#22c55e;--warn:#f59e0b;
+  --bad:#ef4444;--r:10px
+}
+body{
+  font-family:'Inter',sans-serif;color:var(--text);min-height:100vh;
+  background:radial-gradient(1200px 600px at 90% -10%,rgba(124,92,255,.18),transparent 60%),
+    radial-gradient(900px 500px at -10% 10%,rgba(25,194,198,.14),transparent 60%),
+    linear-gradient(180deg,var(--bg),var(--bg2));
+}
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--panel2);border:1px solid var(--line2);border-radius:8px;
+  padding:10px 20px;font-size:13.5px;color:var(--text);
+  transition:transform .3s ease;z-index:999;pointer-events:none;white-space:nowrap;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+.mode-btn{
+  background:var(--panel);border:1px solid var(--line2);
+  border-radius:10px;color:var(--muted);padding:10px 18px;
+  font-size:14px;font-weight:500;transition:all .15s;flex:1;min-width:120px;
+}
+.mode-btn:hover{background:var(--line);color:var(--text)}
+.mode-btn.active{background:rgba(124,92,255,.2);border-color:var(--accent);color:var(--accent)}
+
+.diff-btn{
+  background:var(--panel);border:1px solid var(--line2);
+  border-radius:8px;color:var(--muted);padding:7px 16px;
+  font-size:13px;transition:all .15s;
+}
+.diff-btn:hover{background:var(--line);color:var(--text)}
+.diff-btn.active{background:rgba(25,194,198,.15);border-color:var(--accent2);color:var(--accent2)}
+
+.answer-btn{
+  background:var(--panel);border:1px solid var(--line2);
+  border-radius:9px;color:var(--text);padding:11px 16px;
+  font-size:13.5px;font-weight:500;transition:all .15s;text-align:left;
+}
+.answer-btn:hover{background:rgba(124,92,255,.1);border-color:var(--accent)}
+.answer-btn.correct{background:rgba(34,197,94,.15);border-color:var(--good);color:var(--good)}
+.answer-btn.wrong{background:rgba(239,68,68,.1);border-color:var(--bad);color:var(--bad)}
+.answer-btn:disabled{cursor:default}
+
+.play-btn{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;border-radius:10px;color:#fff;
+  font-size:15px;font-weight:600;padding:12px 28px;
+  box-shadow:0 4px 16px rgba(124,92,255,.3);
+  transition:all .2s;
+}
+.play-btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(124,92,255,.4)}
+.play-btn:active{transform:scale(0.98)}
+
+.nav-btn{
+  background:var(--panel);border:1px solid var(--line2);
+  border-radius:10px;color:var(--text);padding:12px 24px;
+  font-size:14px;font-weight:500;transition:all .15s;
+}
+.nav-btn:hover{background:var(--line2)}
+
+/* Piano for pitch match */
+.mini-piano{position:relative;height:100px;display:inline-flex;user-select:none}
+.mwkey{
+  position:relative;width:32px;height:90px;
+  background:linear-gradient(180deg,#d8dde8,#b8bec8);
+  border:1px solid #555;border-radius:0 0 5px 5px;
+  cursor:pointer;transition:background .08s;flex-shrink:0;z-index:1;
+  display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;
+}
+.mwkey:hover{background:linear-gradient(180deg,#bfc4cf,#9fa5b0)}
+.mwkey.active{background:linear-gradient(180deg,rgba(124,92,255,.7),rgba(124,92,255,.9))}
+.mwkey.target-key{background:linear-gradient(180deg,rgba(25,194,198,.5),rgba(25,194,198,.7))!important;border-color:var(--accent2)!important}
+.mwkey span{font-size:9px;color:#555;pointer-events:none}
+.mwkey.active span,.mwkey.target-key span{color:#fff}
+.mbkey{
+  position:absolute;top:0;width:20px;height:58px;
+  background:linear-gradient(180deg,#1a1e28,#0d1018);
+  border:1px solid #000;border-radius:0 0 4px 4px;
+  cursor:pointer;z-index:2;transition:background .08s;
+}
+.mbkey:hover{background:linear-gradient(180deg,#2a2e3a,#1a1e28)}
+.mbkey.active{background:linear-gradient(180deg,rgba(124,92,255,.9),rgba(124,92,255,1))}
+.mbkey.target-key{background:linear-gradient(180deg,rgba(25,194,198,.9),rgba(25,194,198,1))!important}
+</style>
+</head>
+<body>
+
+<header class="site" style="max-width:1200px;margin:0 auto;padding:16px 20px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+  <a class="brand" href="/" style="display:inline-flex;align-items:center;gap:10px;font-weight:700;color:var(--text);text-decoration:none">
+    <span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;box-shadow:0 4px 16px rgba(124,92,255,.35)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M3 12h2l2-6 3 12 3-9 2 6 2-3h4"/></svg>
+    </span>
+    <span>Tone Generator</span>
+  </a>
+  <nav style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <a href="/" style="color:var(--muted);font-size:13.5px;text-decoration:none">Generator</a>
+    <a href="/hearing-test.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Hearing Test</a>
+    <a href="/beat-maker.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Studio</a>
+    <a href="/chord-builder.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Chords</a>
+    <a href="/metronome.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Metronome</a>
+    <a href="/ear-training.html" style="color:var(--text);font-size:13.5px;text-decoration:none">Ear Training</a>
+    <a href="/noise-machine.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Focus</a>
+    <a href="/spectrogram.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Spectrogram</a>
+  </nav>
+</header>
+
+<div style="max-width:900px;margin:0 auto;padding:0 20px">
+  <div style="padding:32px 0 16px;text-align:center">
+    <h1 style="font-size:clamp(20px,3vw,26px);font-weight:600;margin-bottom:6px">Ear Training</h1>
+    <p style="color:var(--muted);font-size:14px">Train your musical hearing with interactive exercises</p>
+  </div>
+
+  <!-- Mode + Difficulty -->
+  <div class="card" style="padding:20px;margin-bottom:16px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="mode-btn active" id="modeInt" onclick="setMode('interval',this)">Interval Recognition</button>
+      <button class="mode-btn" id="modeChord" onclick="setMode('chord',this)">Chord Quality</button>
+      <button class="mode-btn" id="modePitch" onclick="setMode('pitch',this)">Pitch Match</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--muted);margin-right:4px">Difficulty:</span>
+      <button class="diff-btn active" id="diffEasy" onclick="setDiff('easy',this)">Easy</button>
+      <button class="diff-btn" id="diffMed" onclick="setDiff('medium',this)">Medium</button>
+      <button class="diff-btn" id="diffHard" onclick="setDiff('hard',this)">Hard</button>
+    </div>
+  </div>
+
+  <!-- Score bar -->
+  <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--muted)">Score</span>
+        <span id="scoreDisplay" style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--good)">0</span>
+        <span style="color:var(--muted);font-size:14px">/</span>
+        <span id="totalDisplay" style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--text)">0</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--muted)">Streak</span>
+        <span id="streakDisplay" style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--warn)">0</span>
+        <span style="font-size:13px">🔥</span>
+      </div>
+      <div style="margin-left:auto">
+        <div id="progressBar" style="width:200px;height:6px;background:var(--line2);border-radius:3px;overflow:hidden">
+          <div id="progressFill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width .4s"></div>
+        </div>
+      </div>
+      <button style="background:transparent;border:1px solid var(--line2);border-radius:7px;color:var(--muted);padding:5px 12px;font-size:12px;transition:all .15s" onmouseenter="this.style.color='var(--text)'" onmouseleave="this.style.color='var(--muted)'" onclick="resetScore()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Main game area -->
+  <div class="card" style="padding:28px;margin-bottom:16px">
+    <!-- Question display -->
+    <div style="text-align:center;margin-bottom:24px">
+      <div id="questionText" style="font-size:14px;color:var(--muted);margin-bottom:8px">Press Start to begin</div>
+      <div id="questionMain" style="font-family:'JetBrains Mono',monospace;font-size:clamp(24px,4vw,36px);font-weight:700;color:var(--text);min-height:48px;display:flex;align-items:center;justify-content:center">–</div>
+    </div>
+
+    <!-- Play button -->
+    <div style="display:flex;justify-content:center;margin-bottom:28px">
+      <button class="play-btn" id="playBtn" onclick="playQuestion()">
+        ▶ Play Sound
+      </button>
+    </div>
+
+    <!-- Pitch match piano (hidden unless pitch mode) -->
+    <div id="pitchPianoWrap" style="display:none;margin-bottom:24px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;text-align:center">Click the matching note:</div>
+      <div style="overflow-x:auto">
+        <div style="display:flex;justify-content:center">
+          <div class="mini-piano" id="miniPiano"></div>
+        </div>
+      </div>
+      <div id="pitchFeedback" style="text-align:center;margin-top:12px;font-size:14px;font-weight:500;min-height:20px"></div>
+    </div>
+
+    <!-- Answer buttons -->
+    <div id="answersGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:20px"></div>
+
+    <!-- Feedback -->
+    <div id="feedbackBox" style="display:none;padding:16px;border-radius:10px;margin-bottom:16px">
+      <div id="feedbackResult" style="font-size:16px;font-weight:600;margin-bottom:6px"></div>
+      <div id="feedbackExplain" style="font-size:13.5px;color:var(--muted);line-height:1.6"></div>
+    </div>
+
+    <!-- Nav buttons -->
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="nav-btn" id="startBtn" onclick="startGame()">Start</button>
+      <button class="nav-btn" id="nextBtn" onclick="nextQuestion()" style="display:none">Next →</button>
+      <button class="nav-btn" id="skipBtn" onclick="skipQuestion()" style="display:none;color:var(--muted)">Skip</button>
+    </div>
+  </div>
+</div>
+
+<footer style="max-width:1200px;margin:40px auto 24px;padding:0 20px;color:var(--muted);font-size:12.5px;text-align:center">
+  Runs in your browser · No uploads · No tracking
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+let mode = 'interval';
+let difficulty = 'easy';
+let score = 0, total = 0, streak = 0;
+let currentQuestion = null;
+let answered = false;
+let gameActive = false;
+
+function toast(msg, dur=2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function setMode(m, btn) {
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  resetGame();
+}
+
+function setDiff(d, btn) {
+  difficulty = d;
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (gameActive) nextQuestion();
+}
+
+function resetScore() {
+  score = 0; total = 0; streak = 0;
+  updateScore();
+  toast('Score reset');
+}
+
+function resetGame() {
+  gameActive = false;
+  answered = false;
+  document.getElementById('questionText').textContent = 'Press Start to begin';
+  document.getElementById('questionMain').textContent = '–';
+  document.getElementById('answersGrid').innerHTML = '';
+  document.getElementById('feedbackBox').style.display = 'none';
+  document.getElementById('startBtn').style.display = '';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('skipBtn').style.display = 'none';
+  document.getElementById('pitchPianoWrap').style.display = 'none';
+  document.getElementById('playBtn').textContent = '▶ Play Sound';
+}
+
+function updateScore() {
+  document.getElementById('scoreDisplay').textContent = score;
+  document.getElementById('totalDisplay').textContent = total;
+  document.getElementById('streakDisplay').textContent = streak;
+  const pct = total > 0 ? (score / total * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+function playTone(freq, startTime, dur, vol=0.4, type='sine') {
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(0, startTime);
+  g.gain.linearRampToValueAtTime(vol, startTime + 0.015);
+  g.gain.setValueAtTime(vol, startTime + dur * 0.6);
+  g.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(startTime); osc.stop(startTime + dur + 0.05);
+}
+
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+const INTERVALS_ALL = [
+  {name:'Unison',semi:0,desc:'Same pitch, ratio 1:1. The purest consonance — no vibration difference.',example:'Do–Do'},
+  {name:'Minor 2nd',semi:1,desc:'Half step, ratio 16:15. Extremely tense and dissonant — creates friction.',example:'E–F in C major'},
+  {name:'Major 2nd',semi:2,desc:'Whole step, ratio 9:8. Mildly dissonant, creates motion and expectation.',example:'C–D'},
+  {name:'Minor 3rd',semi:3,desc:'Ratio 6:5. Softly consonant, the defining interval of minor chords. Melancholic.',example:'A–C in Am'},
+  {name:'Major 3rd',semi:4,desc:'Ratio 5:4. Bright and consonant. Defines the major chord\'s happy sound.',example:'C–E in C major'},
+  {name:'Perfect 4th',semi:5,desc:'Ratio 4:3. Strong and stable. Sounds hollow — neither major nor minor.',example:'C–F'},
+  {name:'Tritone',semi:6,desc:'Ratio 45:32. Maximum dissonance — splits the octave exactly in half. Tense!',example:'C–F#, B–F'},
+  {name:'Perfect 5th',semi:7,desc:'Ratio 3:2. Very stable and open. The basis of harmony in most world music.',example:'C–G'},
+  {name:'Minor 6th',semi:8,desc:'Ratio 8:5. Mildly dissonant, somewhat dark and mysterious.',example:'E–C above'},
+  {name:'Major 6th',semi:9,desc:'Ratio 5:3. Warm and sweet — used in romantic melodies.',example:'C–A'},
+  {name:'Minor 7th',semi:10,desc:'Ratio 16:9. Bluesy, unresolved — creates desire to move to the tonic.',example:'C–Bb'},
+  {name:'Major 7th',semi:11,desc:'Ratio 15:8. Dreamy and tense — just a half step from the octave.',example:'C–B'},
+  {name:'Octave',semi:12,desc:'Ratio 2:1. The purest interval — the same pitch doubled in frequency.',example:'C3–C4'},
+];
+
+const INTERVALS_EASY = INTERVALS_ALL.filter(i => [0,3,4,7,12].includes(i.semi));
+const INTERVALS_MEDIUM = INTERVALS_ALL.filter(i => [0,2,3,4,5,7,9,12].includes(i.semi));
+
+const CHORD_QUALITIES_ALL = [
+  {name:'Major',intervals:[0,4,7],desc:'Bright and stable. The most common chord in Western music.'},
+  {name:'Minor',intervals:[0,3,7],desc:'Darker and more melancholic. Conveys sadness or depth.'},
+  {name:'Diminished',intervals:[0,3,6],desc:'Tense and unstable. The stacked minor thirds create maximum tension.'},
+  {name:'Augmented',intervals:[0,4,8],desc:'Dreamy and ambiguous. Neither resolves up nor down cleanly.'},
+  {name:'Dominant 7th',intervals:[0,4,7,10],desc:'Bluesy and tense. The extra minor 7th interval wants to resolve.'},
+  {name:'Major 7th',intervals:[0,4,7,11],desc:'Lush and jazzy. The major 7th adds richness without strong tension.'},
+];
+const CHORD_QUALITIES_EASY = CHORD_QUALITIES_ALL.slice(0,3);
+const CHORD_QUALITIES_MEDIUM = CHORD_QUALITIES_ALL.slice(0,4);
+
+function startGame() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  gameActive = true;
+  document.getElementById('startBtn').style.display = 'none';
+  document.getElementById('skipBtn').style.display = '';
+  nextQuestion();
+}
+
+function nextQuestion() {
+  answered = false;
+  document.getElementById('feedbackBox').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('skipBtn').style.display = '';
+  document.getElementById('pitchPianoWrap').style.display = 'none';
+  document.querySelectorAll('.answer-btn').forEach(b => { b.disabled = false; b.className = 'answer-btn'; });
+
+  if (mode === 'interval') buildIntervalQ();
+  else if (mode === 'chord') buildChordQ();
+  else buildPitchQ();
+
+  setTimeout(() => playQuestion(), 300);
+}
+
+function buildIntervalQ() {
+  const pool = difficulty === 'easy' ? INTERVALS_EASY : difficulty === 'medium' ? INTERVALS_MEDIUM : INTERVALS_ALL;
+  const target = pool[Math.floor(Math.random() * pool.length)];
+  const rootMidi = 48 + Math.floor(Math.random() * 13); // C3 to C4
+  const ascending = difficulty !== 'hard' || Math.random() > 0.3;
+  currentQuestion = { type:'interval', target, rootMidi, ascending };
+
+  document.getElementById('questionText').textContent = 'What interval is this?';
+  document.getElementById('questionMain').textContent = '?';
+
+  // Build answer choices
+  const choices = [target];
+  const others = pool.filter(i => i.semi !== target.semi);
+  while (choices.length < Math.min(pool.length, difficulty === 'easy' ? 4 : 6)) {
+    const pick = others[Math.floor(Math.random() * others.length)];
+    if (!choices.find(c => c.semi === pick.semi)) choices.push(pick);
+  }
+  choices.sort(() => Math.random() - 0.5);
+  buildAnswerBtns(choices, target, 'name');
+}
+
+function buildChordQ() {
+  const pool = difficulty === 'easy' ? CHORD_QUALITIES_EASY : difficulty === 'medium' ? CHORD_QUALITIES_MEDIUM : CHORD_QUALITIES_ALL;
+  const target = pool[Math.floor(Math.random() * pool.length)];
+  const rootMidi = 48 + Math.floor(Math.random() * 12);
+  let intervals = [...target.intervals];
+  if (difficulty === 'hard' && Math.random() > 0.5) {
+    // Inversion: shift lowest note up an octave
+    const shift = intervals.shift();
+    intervals.push(shift + 12);
+  }
+  currentQuestion = { type:'chord', target, rootMidi, intervals };
+
+  document.getElementById('questionText').textContent = 'What chord quality is this?';
+  document.getElementById('questionMain').textContent = '?';
+
+  const choices = [...pool].sort(() => Math.random() - 0.5);
+  buildAnswerBtns(choices, target, 'name');
+}
+
+function buildPitchQ() {
+  const noteNames = ['C','D','E','F','G','A','B','C#','D#','F#','G#','A#'];
+  const pool = difficulty === 'easy' ? ['C','D','E','F','G','A','B'] : noteNames;
+  const noteName = pool[Math.floor(Math.random() * pool.length)];
+  const octave = 4;
+  const midi = 60 + NOTE_NAMES.indexOf(noteName);
+  currentQuestion = { type:'pitch', noteName, octave, midi };
+
+  document.getElementById('questionText').textContent = 'Click the key that matches this note:';
+  document.getElementById('questionMain').textContent = noteName + octave;
+  document.getElementById('pitchPianoWrap').style.display = '';
+  document.getElementById('answersGrid').innerHTML = '';
+  buildMiniPiano(midi);
+}
+
+function buildAnswerBtns(choices, target, key) {
+  const grid = document.getElementById('answersGrid');
+  grid.innerHTML = '';
+  choices.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'answer-btn';
+    btn.textContent = c[key];
+    btn.onclick = function() {
+      if (answered) return;
+      handleAnswer(c[key] === target[key], target, c);
+      if (c[key] === target[key]) btn.classList.add('correct');
+      else {
+        btn.classList.add('wrong');
+        grid.querySelectorAll('.answer-btn').forEach(b => {
+          if (b.textContent === target[key]) b.classList.add('correct');
+        });
+      }
+      grid.querySelectorAll('.answer-btn').forEach(b => b.disabled = true);
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function handleAnswer(correct, target, chosen) {
+  answered = true;
+  total++;
+  if (correct) { score++; streak++; } else { streak = 0; }
+  updateScore();
+
+  const fb = document.getElementById('feedbackBox');
+  const fr = document.getElementById('feedbackResult');
+  const fe = document.getElementById('feedbackExplain');
+
+  fb.style.display = '';
+  if (correct) {
+    fb.style.background = 'rgba(34,197,94,.1)';
+    fb.style.border = '1px solid rgba(34,197,94,.3)';
+    fr.style.color = 'var(--good)';
+    fr.textContent = '✓ Correct!';
+  } else {
+    fb.style.background = 'rgba(239,68,68,.08)';
+    fb.style.border = '1px solid rgba(239,68,68,.2)';
+    fr.style.color = 'var(--bad)';
+    fr.textContent = '✗ That was: ' + (target.name || '');
+  }
+  fe.textContent = target.desc || '';
+
+  document.getElementById('nextBtn').style.display = '';
+  document.getElementById('skipBtn').style.display = 'none';
+}
+
+function skipQuestion() {
+  total++;
+  streak = 0;
+  updateScore();
+  nextQuestion();
+}
+
+function playQuestion() {
+  if (!currentQuestion) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const t = audioCtx.currentTime + 0.05;
+
+  if (currentQuestion.type === 'interval') {
+    const f1 = midiToFreq(currentQuestion.rootMidi);
+    const f2 = midiToFreq(currentQuestion.rootMidi + currentQuestion.target.semi);
+    playTone(f1, t, 0.7);
+    playTone(f2, t + 0.85, 0.7);
+  } else if (currentQuestion.type === 'chord') {
+    currentQuestion.intervals.forEach((semi, i) => {
+      const freq = midiToFreq(currentQuestion.rootMidi + semi);
+      playTone(freq, t + i * 0.02, 1.2, 0.3);
+    });
+  } else if (currentQuestion.type === 'pitch') {
+    playTone(midiToFreq(currentQuestion.midi), t, 1.0, 0.5);
+  }
+}
+
+// Mini piano for pitch match
+function buildMiniPiano(targetMidi) {
+  const wrap = document.getElementById('miniPiano');
+  wrap.innerHTML = '';
+  const whiteNotes = ['C','D','E','F','G','A','B'];
+  const blackAfter = {0:true,1:true,3:true,4:true,5:true};
+  let wCount = 0;
+
+  for (let oct = 4; oct <= 5; oct++) {
+    for (let wi = 0; wi < 7; wi++) {
+      const noteName = whiteNotes[wi];
+      const midi = 60 + NOTE_NAMES.indexOf(noteName) + (oct - 4) * 12;
+      const div = document.createElement('div');
+      div.className = 'mwkey';
+      if (midi === targetMidi) div.classList.add('target-key');
+      div.dataset.midi = midi;
+      const lbl = document.createElement('span');
+      lbl.textContent = wi === 0 ? noteName + oct : noteName;
+      div.appendChild(lbl);
+      div.onclick = () => pitchGuess(midi, targetMidi);
+      wrap.appendChild(div);
+      wCount++;
+    }
+  }
+
+  // Black keys
+  let cumW = 0;
+  for (let oct = 4; oct <= 5; oct++) {
+    for (let wi = 0; wi < 7; wi++) {
+      if (blackAfter[wi]) {
+        const baseMidi = 60 + NOTE_NAMES.indexOf(whiteNotes[wi]) + (oct - 4) * 12;
+        const bMidi = baseMidi + 1;
+        if (bMidi > 84) continue;
+        const bk = document.createElement('div');
+        bk.className = 'mbkey';
+        if (bMidi === targetMidi) bk.classList.add('target-key');
+        bk.dataset.midi = bMidi;
+        const leftPos = (cumW + wi + 0.65) * 32 - 10;
+        bk.style.left = leftPos + 'px';
+        bk.onclick = (e) => { e.stopPropagation(); pitchGuess(bMidi, targetMidi); };
+        wrap.appendChild(bk);
+      }
+    }
+    cumW += 7;
+  }
+}
+
+function pitchGuess(guessed, target) {
+  if (answered) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  playTone(midiToFreq(guessed), audioCtx.currentTime + 0.05, 0.6);
+
+  const diff = guessed - target;
+  const fb = document.getElementById('pitchFeedback');
+  const correct = diff === 0;
+
+  // Visual
+  document.querySelectorAll('.mwkey,.mbkey').forEach(k => {
+    if (+k.dataset.midi === guessed) k.classList.add('active');
+  });
+
+  if (correct) {
+    fb.style.color = 'var(--good)';
+    fb.textContent = '✓ Correct!';
+    handleAnswer(true, {name: NOTE_NAMES[target%12]+Math.floor(target/12-1), desc:'Perfect match! You identified the pitch accurately.'}, {});
+  } else if (diff > 0) {
+    fb.style.color = 'var(--warn)';
+    fb.textContent = '↓ Too high by ' + Math.abs(diff) + (Math.abs(diff)===1?' semitone':' semitones') + ' — try lower';
+  } else {
+    fb.style.color = 'var(--warn)';
+    fb.textContent = '↑ Too low by ' + Math.abs(diff) + (Math.abs(diff)===1?' semitone':' semitones') + ' — try higher';
+  }
+
+  if (correct) {
+    document.getElementById('nextBtn').style.display = '';
+    document.getElementById('skipBtn').style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Focus Noise – Tone Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d12;--bg2:#0f131b;--panel:#141923;--panel2:#1a2030;
+  --line:#232a3a;--line2:#2d3548;--text:#e7ecf3;--muted:#8a93a6;
+  --accent:#7c5cff;--accent2:#19c2c6;--good:#22c55e;--warn:#f59e0b;
+  --bad:#ef4444;--r:10px
+}
+body{
+  font-family:'Inter',sans-serif;color:var(--text);min-height:100vh;
+  background:radial-gradient(1200px 600px at 90% -10%,rgba(124,92,255,.18),transparent 60%),
+    radial-gradient(900px 500px at -10% 10%,rgba(25,194,198,.14),transparent 60%),
+    linear-gradient(180deg,var(--bg),var(--bg2));
+}
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--panel2);border:1px solid var(--line2);border-radius:8px;
+  padding:10px 20px;font-size:13.5px;color:var(--text);
+  transition:transform .3s ease;z-index:999;pointer-events:none;white-space:nowrap;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+.noise-btn{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:2px solid var(--line2);
+  border-radius:16px;color:var(--muted);
+  padding:28px 20px;
+  font-size:16px;font-weight:600;
+  transition:all .25s;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  position:relative;overflow:hidden;
+  min-height:160px;justify-content:center;
+}
+.noise-btn:hover{border-color:var(--line);transform:translateY(-2px)}
+.noise-btn.active-white{
+  border-color:rgba(231,236,243,.5);
+  background:linear-gradient(180deg,rgba(231,236,243,.08),rgba(231,236,243,.04));
+  color:var(--text);
+  box-shadow:0 0 30px rgba(231,236,243,.08),0 8px 24px rgba(0,0,0,.4);
+}
+.noise-btn.active-pink{
+  border-color:rgba(245,158,11,.5);
+  background:linear-gradient(180deg,rgba(245,158,11,.1),rgba(245,158,11,.05));
+  color:#fbbf24;
+  box-shadow:0 0 30px rgba(245,158,11,.1),0 8px 24px rgba(0,0,0,.4);
+}
+.noise-btn.active-brown{
+  border-color:rgba(124,92,255,.5);
+  background:linear-gradient(180deg,rgba(124,92,255,.12),rgba(124,92,255,.06));
+  color:var(--accent);
+  box-shadow:0 0 30px rgba(124,92,255,.12),0 8px 24px rgba(0,0,0,.4);
+}
+.noise-btn .noise-icon{
+  font-size:32px;line-height:1;
+}
+.noise-btn .noise-tag{
+  font-size:11px;font-weight:400;color:var(--muted);text-align:center;line-height:1.5;
+  max-width:160px;
+}
+
+.timer-btn{
+  background:var(--panel);border:1px solid var(--line2);
+  border-radius:8px;color:var(--muted);padding:8px 18px;
+  font-size:13px;transition:all .15s;
+}
+.timer-btn:hover{background:var(--line);color:var(--text)}
+.timer-btn.active{background:rgba(25,194,198,.15);border-color:var(--accent2);color:var(--accent2)}
+
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row input[type=range]{
+  flex:1;height:5px;border-radius:3px;
+  accent-color:var(--accent);background:var(--line2);
+}
+
+@keyframes pulse-ring{
+  0%{transform:scale(1);opacity:.6}
+  50%{transform:scale(1.08);opacity:.2}
+  100%{transform:scale(1);opacity:.6}
+}
+.pulse-ring{
+  position:absolute;inset:0;border-radius:14px;
+  border:2px solid currentColor;
+  animation:pulse-ring 2s ease-in-out infinite;
+  pointer-events:none;
+}
+</style>
+</head>
+<body>
+
+<header class="site" style="max-width:1200px;margin:0 auto;padding:16px 20px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+  <a class="brand" href="/" style="display:inline-flex;align-items:center;gap:10px;font-weight:700;color:var(--text);text-decoration:none">
+    <span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;box-shadow:0 4px 16px rgba(124,92,255,.35)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M3 12h2l2-6 3 12 3-9 2 6 2-3h4"/></svg>
+    </span>
+    <span>Tone Generator</span>
+  </a>
+  <nav style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <a href="/" style="color:var(--muted);font-size:13.5px;text-decoration:none">Generator</a>
+    <a href="/hearing-test.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Hearing Test</a>
+    <a href="/beat-maker.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Studio</a>
+    <a href="/chord-builder.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Chords</a>
+    <a href="/metronome.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Metronome</a>
+    <a href="/ear-training.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Ear Training</a>
+    <a href="/noise-machine.html" style="color:var(--text);font-size:13.5px;text-decoration:none">Focus</a>
+    <a href="/spectrogram.html" style="color:var(--muted);font-size:13.5px;text-decoration:none">Spectrogram</a>
+  </nav>
+</header>
+
+<div style="max-width:760px;margin:0 auto;padding:0 20px">
+  <div style="padding:40px 0 24px;text-align:center">
+    <h1 style="font-size:clamp(22px,4vw,32px);font-weight:600;margin-bottom:8px;letter-spacing:-.3px">Focus Noise</h1>
+    <p style="color:var(--muted);font-size:15px;line-height:1.6">Ambient noise for focus, sleep, and relaxation.<br>All sounds generated in your browser.</p>
+  </div>
+
+  <!-- Noise type selector -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px">
+
+    <button class="noise-btn" id="btnWhite" onclick="toggleNoise('white')">
+      <div class="pulse-ring" id="ringWhite" style="display:none"></div>
+      <div class="noise-icon">〰️</div>
+      <div style="font-size:18px;font-weight:700">White</div>
+      <div style="font-size:12px;color:var(--muted)">All frequencies equal</div>
+      <div class="noise-tag">Focus · Tinnitus masking · Concentration</div>
+    </button>
+
+    <button class="noise-btn" id="btnPink" onclick="toggleNoise('pink')">
+      <div class="pulse-ring" id="ringPink" style="display:none"></div>
+      <div class="noise-icon">🌊</div>
+      <div style="font-size:18px;font-weight:700">Pink</div>
+      <div style="font-size:12px;color:var(--muted)">−3 dB/octave</div>
+      <div class="noise-tag">Sleep · Relaxation · Rain-like texture</div>
+    </button>
+
+    <button class="noise-btn" id="btnBrown" onclick="toggleNoise('brown')">
+      <div class="pulse-ring" id="ringBrown" style="display:none"></div>
+      <div class="noise-icon">🌪️</div>
+      <div style="font-size:18px;font-weight:700">Brown</div>
+      <div style="font-size:12px;color:var(--muted)">−6 dB/octave</div>
+      <div class="noise-tag">Deep focus · ADHD · Heavy rumble</div>
+    </button>
+
+  </div>
+
+  <!-- Volume + oscilloscope -->
+  <div class="card" style="padding:24px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.7px">Volume</span>
+      <span id="volLabel" style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--text)">70%</span>
+    </div>
+    <div class="slider-row">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="var(--muted)" stroke-width="1.5">
+        <path d="M3 5v6M7 3v10M11 6v4M15 4v8"/>
+      </svg>
+      <input type="range" id="volSlider" min="0" max="100" value="70" oninput="setVolume(+this.value)">
+      <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="var(--muted)" stroke-width="1.5">
+        <path d="M1 7v2M4 4v8M7 2v12M10 4v8M13 7v2"/>
+      </svg>
+    </div>
+
+    <canvas id="oscilloscope" width="700" height="80" style="width:100%;height:80px;margin-top:20px;border-radius:8px;background:rgba(0,0,0,.3)"></canvas>
+  </div>
+
+  <!-- Tone mix -->
+  <div class="card" style="padding:24px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div>
+        <span style="font-size:13px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.7px">Tone Mix</span>
+        <span style="font-size:12px;color:var(--muted);margin-left:8px">Add a sine tone to the noise</span>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <span style="font-size:13px;color:var(--muted)">Enable</span>
+        <div style="position:relative;width:40px;height:22px">
+          <input type="checkbox" id="toneToggle" onchange="toggleTone()" style="opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer;z-index:2">
+          <div id="toneTrack" style="position:absolute;inset:0;background:var(--line2);border-radius:11px;transition:background .2s"></div>
+          <div id="toneThumb" style="position:absolute;top:3px;left:3px;width:16px;height:16px;background:var(--muted);border-radius:50%;transition:all .2s"></div>
+        </div>
+      </label>
+    </div>
+
+    <div id="toneControls" style="margin-top:16px;opacity:.4;pointer-events:none;transition:opacity .2s">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:13px;color:var(--muted)">Frequency</span>
+        <span id="toneFreqLabel" style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--text)">100 Hz</span>
+      </div>
+      <div class="slider-row">
+        <span style="font-size:12px;color:var(--muted)">50</span>
+        <input type="range" id="toneFreqSlider" min="50" max="500" value="100" oninput="setToneFreq(+this.value)" style="flex:1">
+        <span style="font-size:12px;color:var(--muted)">500</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px">
+        <span style="font-size:13px;color:var(--muted)">Tone Volume</span>
+        <span id="toneVolLabel" style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--text)">30%</span>
+      </div>
+      <div class="slider-row">
+        <span style="font-size:12px;color:var(--muted)">0</span>
+        <input type="range" id="toneVolSlider" min="0" max="100" value="30" oninput="setToneVol(+this.value)" style="flex:1">
+        <span style="font-size:12px;color:var(--muted)">100</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timer -->
+  <div class="card" style="padding:24px;margin-bottom:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <span style="font-size:13px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.7px">Auto Stop Timer</span>
+      </div>
+      <div id="countdownDisplay" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--accent2);display:none">00:00</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="timer-btn active" id="timerOff" onclick="setTimer(0,this)">Off</button>
+      <button class="timer-btn" id="timer15" onclick="setTimer(15,this)">15 min</button>
+      <button class="timer-btn" id="timer30" onclick="setTimer(30,this)">30 min</button>
+      <button class="timer-btn" id="timer45" onclick="setTimer(45,this)">45 min</button>
+      <button class="timer-btn" id="timer60" onclick="setTimer(60,this)">60 min</button>
+    </div>
+  </div>
+
+</div>
+
+<footer style="max-width:1200px;margin:40px auto 24px;padding:0 20px;color:var(--muted);font-size:12.5px;text-align:center">
+  Runs in your browser · No uploads · No tracking
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+let noiseType = null;
+let noiseSource = null;
+let noiseGain = null;
+let toneOsc = null;
+let toneGain = null;
+let masterGain = null;
+let analyser = null;
+let animFrame = null;
+let toneEnabled = false;
+let volume = 0.7;
+let toneVol = 0.3;
+let toneFreq = 100;
+let timerMinutes = 0;
+let timerCountdown = 0;
+let timerInterval = null;
+
+function toast(msg, dur=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// Build noise buffer
+function createWhiteBuffer() {
+  const buf = audioCtx.createBuffer(2, audioCtx.sampleRate * 4, audioCtx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  return buf;
+}
+
+function createPinkBuffer() {
+  const buf = audioCtx.createBuffer(2, audioCtx.sampleRate * 4, audioCtx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886*b0 + white*0.0555179;
+      b1 = 0.99332*b1 + white*0.0750759;
+      b2 = 0.96900*b2 + white*0.1538520;
+      b3 = 0.86650*b3 + white*0.3104856;
+      b4 = 0.55000*b4 + white*0.5329522;
+      b5 = -0.7616*b5 - white*0.0168980;
+      data[i] = (b0+b1+b2+b3+b4+b5+b6 + white*0.5362) * 0.11;
+      b6 = white * 0.115926;
+    }
+  }
+  return buf;
+}
+
+function createBrownBuffer() {
+  const buf = audioCtx.createBuffer(2, audioCtx.sampleRate * 4, audioCtx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      data[i] = (last + 0.02 * white) / 1.02;
+      last = data[i];
+      data[i] *= 3.5;
+    }
+  }
+  return buf;
+}
+
+function setupGraph() {
+  if (!masterGain) {
+    masterGain = audioCtx.createGain();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    masterGain.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    masterGain.gain.value = volume;
+  }
+}
+
+function startNoise(type) {
+  setupGraph();
+  let buf;
+  if (type === 'white') buf = createWhiteBuffer();
+  else if (type === 'pink') buf = createPinkBuffer();
+  else buf = createBrownBuffer();
+
+  noiseSource = audioCtx.createBufferSource();
+  noiseSource.buffer = buf;
+  noiseSource.loop = true;
+
+  noiseGain = audioCtx.createGain();
+  noiseGain.gain.setValueAtTime(0, audioCtx.currentTime);
+  noiseGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.5);
+
+  noiseSource.connect(noiseGain);
+  noiseGain.connect(masterGain);
+  noiseSource.start();
+}
+
+function stopNoise(fade=true) {
+  if (!noiseSource) return;
+  const src = noiseSource;
+  const g = noiseGain;
+  if (fade && g) {
+    g.gain.setValueAtTime(g.gain.value, audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+    setTimeout(() => { try { src.stop(); } catch(e){} }, 600);
+  } else {
+    try { src.stop(); } catch(e){}
+  }
+  noiseSource = null;
+  noiseGain = null;
+}
+
+function toggleNoise(type) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  // Stop current
+  stopNoise(true);
+  if (toneOsc) stopToneOsc();
+
+  if (noiseType === type) {
+    // Toggle off
+    noiseType = null;
+    updateNoiseUI(null);
+    stopOscilloscope();
+    toast('Stopped');
+  } else {
+    noiseType = type;
+    startNoise(type);
+    if (toneEnabled) startToneOsc();
+    updateNoiseUI(type);
+    startOscilloscope();
+    const labels = {white:'White noise — flat spectrum', pink:'Pink noise — warm, like rain', brown:'Brown noise — deep rumble'};
+    toast(labels[type] || 'Playing');
+  }
+}
+
+function updateNoiseUI(activeType) {
+  ['white','pink','brown'].forEach(t => {
+    const btn = document.getElementById('btn' + t.charAt(0).toUpperCase() + t.slice(1));
+    const ring = document.getElementById('ring' + t.charAt(0).toUpperCase() + t.slice(1));
+    btn.className = 'noise-btn';
+    ring.style.display = 'none';
+    if (t === activeType) {
+      btn.classList.add('active-' + t);
+      ring.style.display = '';
+    }
+  });
+}
+
+function setVolume(v) {
+  volume = v / 100;
+  document.getElementById('volLabel').textContent = v + '%';
+  if (masterGain) masterGain.gain.setTargetAtTime(volume, audioCtx.currentTime, 0.05);
+}
+
+function toggleTone() {
+  toneEnabled = document.getElementById('toneToggle').checked;
+  const ctrl = document.getElementById('toneControls');
+  const track = document.getElementById('toneTrack');
+  const thumb = document.getElementById('toneThumb');
+
+  if (toneEnabled) {
+    ctrl.style.opacity = '1';
+    ctrl.style.pointerEvents = 'auto';
+    track.style.background = 'var(--accent)';
+    thumb.style.left = '21px';
+    thumb.style.background = '#fff';
+    if (noiseType) startToneOsc();
+  } else {
+    ctrl.style.opacity = '.4';
+    ctrl.style.pointerEvents = 'none';
+    track.style.background = 'var(--line2)';
+    thumb.style.left = '3px';
+    thumb.style.background = 'var(--muted)';
+    stopToneOsc();
+  }
+}
+
+function startToneOsc() {
+  if (toneOsc) return;
+  setupGraph();
+  toneOsc = audioCtx.createOscillator();
+  toneGain = audioCtx.createGain();
+  toneOsc.type = 'sine';
+  toneOsc.frequency.value = toneFreq;
+  toneGain.gain.setValueAtTime(0, audioCtx.currentTime);
+  toneGain.gain.linearRampToValueAtTime(toneVol * 0.3, audioCtx.currentTime + 0.3);
+  toneOsc.connect(toneGain);
+  toneGain.connect(masterGain);
+  toneOsc.start();
+}
+
+function stopToneOsc() {
+  if (!toneOsc) return;
+  toneGain.gain.setValueAtTime(toneGain.gain.value, audioCtx.currentTime);
+  toneGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+  const osc = toneOsc;
+  setTimeout(() => { try { osc.stop(); } catch(e){} }, 400);
+  toneOsc = null;
+  toneGain = null;
+}
+
+function setToneFreq(v) {
+  toneFreq = v;
+  document.getElementById('toneFreqLabel').textContent = v + ' Hz';
+  if (toneOsc) toneOsc.frequency.setTargetAtTime(v, audioCtx.currentTime, 0.05);
+}
+
+function setToneVol(v) {
+  toneVol = v / 100;
+  document.getElementById('toneVolLabel').textContent = v + '%';
+  if (toneGain) toneGain.gain.setTargetAtTime(toneVol * 0.3, audioCtx.currentTime, 0.05);
+}
+
+// Timer
+function setTimer(minutes, btn) {
+  timerMinutes = minutes;
+  document.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  clearInterval(timerInterval);
+  document.getElementById('countdownDisplay').style.display = 'none';
+
+  if (minutes > 0) {
+    timerCountdown = minutes * 60;
+    document.getElementById('countdownDisplay').style.display = '';
+    updateCountdown();
+    timerInterval = setInterval(() => {
+      timerCountdown--;
+      updateCountdown();
+      if (timerCountdown <= 0) {
+        clearInterval(timerInterval);
+        fadeOutAndStop();
+        toast('Timer finished — noise stopped');
+      }
+    }, 1000);
+    toast('Timer set for ' + minutes + ' minutes');
+  }
+}
+
+function updateCountdown() {
+  const m = Math.floor(timerCountdown / 60).toString().padStart(2,'0');
+  const s = (timerCountdown % 60).toString().padStart(2,'0');
+  document.getElementById('countdownDisplay').textContent = m + ':' + s;
+}
+
+function fadeOutAndStop() {
+  if (masterGain) {
+    masterGain.gain.setValueAtTime(masterGain.gain.value, audioCtx.currentTime);
+    masterGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 2);
+  }
+  setTimeout(() => {
+    stopNoise(false);
+    stopToneOsc();
+    noiseType = null;
+    updateNoiseUI(null);
+    stopOscilloscope();
+    if (masterGain) masterGain.gain.value = volume;
+  }, 2100);
+}
+
+// Oscilloscope
+function startOscilloscope() {
+  if (animFrame) return;
+  const canvas = document.getElementById('oscilloscope');
+  const ctx2 = canvas.getContext('2d');
+  const bufLen = analyser.frequencyBinCount;
+  const dataArr = new Uint8Array(bufLen);
+
+  function draw() {
+    animFrame = requestAnimationFrame(draw);
+    analyser.getByteTimeDomainData(dataArr);
+    ctx2.clearRect(0, 0, canvas.width, canvas.height);
+    ctx2.fillStyle = 'rgba(0,0,0,0)';
+
+    const colors = {white:'rgba(231,236,243,0.6)',pink:'rgba(251,191,36,0.6)',brown:'rgba(124,92,255,0.6)'};
+    ctx2.strokeStyle = noiseType ? (colors[noiseType] || 'rgba(124,92,255,0.6)') : 'rgba(124,92,255,0.4)';
+    ctx2.lineWidth = 1.5;
+    ctx2.beginPath();
+
+    const sliceW = canvas.width / bufLen;
+    let x = 0;
+    for (let i = 0; i < bufLen; i++) {
+      const v = dataArr[i] / 128;
+      const y = v * canvas.height / 2;
+      if (i === 0) ctx2.moveTo(x, y);
+      else ctx2.lineTo(x, y);
+      x += sliceW;
+    }
+    ctx2.lineTo(canvas.width, canvas.height / 2);
+    ctx2.stroke();
+  }
+  draw();
+}
+
+function stopOscilloscope() {
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  const canvas = document.getElementById('oscilloscope');
+  const ctx2 = canvas.getContext('2d');
+  ctx2.clearRect(0, 0, canvas.width, canvas.height);
+  // Draw flat line
+  ctx2.strokeStyle = 'rgba(124,92,255,0.2)';
+  ctx2.lineWidth = 1.5;
+  ctx2.beginPath();
+  ctx2.moveTo(0, canvas.height / 2);
+  ctx2.lineTo(canvas.width, canvas.height / 2);
+  ctx2.stroke();
+}
+
+// Draw initial flat line
+stopOscilloscope();
+</script>
+</body>
+</html>

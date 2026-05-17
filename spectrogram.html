@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="color-scheme" content="dark"/>
+<title>Live Spectrogram — See Your Sound in Real Time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#0b0d12;--bg2:#0f131b;--panel:#141923;--panel2:#1a2030;--line:#232a3a;--line2:#2d3548;--text:#e7ecf3;--muted:#8a93a6;--accent:#7c5cff;--accent2:#19c2c6;--good:#22c55e;--warn:#f59e0b;--bad:#ef4444}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:radial-gradient(1200px 600px at 90% -10%,rgba(124,92,255,.18),transparent 60%),radial-gradient(900px 500px at -10% 10%,rgba(25,194,198,.14),transparent 60%),linear-gradient(180deg,var(--bg),var(--bg2));color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+header.site{max-width:1200px;margin:0 auto;padding:16px 20px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:inline-flex;align-items:center;gap:10px;font-weight:700;color:var(--text)}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;box-shadow:0 4px 16px rgba(124,92,255,.35)}
+nav.top-nav{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+nav.top-nav a{color:var(--muted);font-size:13.5px}
+nav.top-nav a.active,nav.top-nav a:hover{color:var(--text);text-decoration:none}
+main{max-width:1200px;margin:0 auto;padding:20px 20px 60px}
+.hero{text-align:center;padding:36px 0 24px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);border-radius:999px;font-size:12.5px;margin-bottom:18px}
+.eyebrow .dot{width:8px;height:8px;border-radius:50%;background:var(--accent2);box-shadow:0 0 0 4px rgba(25,194,198,.2)}
+.hero h1{font-size:clamp(28px,4vw,46px);font-weight:800;letter-spacing:-.02em;margin-bottom:10px}
+.hero h1 span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:var(--muted);max-width:580px;margin:0 auto 24px;font-size:15px}
+.card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:16px}
+.card+.card{margin-top:12px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 18px;border-radius:9px;font-weight:600;font-size:13.5px;cursor:pointer;transition:all .1s;font-family:inherit}
+.btn:hover{border-color:var(--line2);background:#1f2a40}
+.btn.primary{background:linear-gradient(135deg,var(--accent),#5e3eff);border-color:transparent;color:#fff;box-shadow:0 6px 18px rgba(124,92,255,.3)}
+.btn.primary:hover{filter:brightness(1.1)}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.ctl-group{display:flex;align-items:center;gap:8px}
+.ctl-group label{font-size:12px;color:var(--muted)}
+.ctl-group select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:7px;font-size:12px;font-family:inherit;cursor:pointer}
+.ctl-group input[type=range]{accent-color:var(--accent2);width:90px}
+#spectrogram-canvas{width:100%;height:280px;border-radius:8px;background:#000;display:block;cursor:crosshair}
+#scope-canvas{width:100%;height:100px;border-radius:8px;background:rgba(0,0,0,.4);border:1px solid var(--line);display:block;margin-top:10px}
+.freq-readout{display:flex;gap:24px;align-items:center;flex-wrap:wrap;padding:12px 0 4px}
+.freq-big{font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;background:linear-gradient(135deg,var(--accent2),#6cd0ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.freq-note{font-size:18px;font-weight:700}
+.freq-detail{font-size:12.5px;color:var(--muted)}
+.peak-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:12px}
+.peak-item{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.peak-item .ph{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--accent2)}
+.peak-item .pn{font-size:12px;color:var(--muted);margin-top:2px}
+.status{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.status .dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.status.active{color:var(--good);border-color:rgba(34,197,94,.35)}
+.status.active .dot{background:var(--good);box-shadow:0 0 0 4px rgba(34,197,94,.2);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(34,197,94,.2)}50%{box-shadow:0 0 0 8px rgba(34,197,94,.04)}}
+.info-boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px}
+.info-box{border-left:3px solid var(--accent2);padding:10px 14px;background:rgba(25,194,198,.05);border-radius:0 8px 8px 0;font-size:13px;color:#c0c8d8}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:100;font-size:13px}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <a class="brand" href="/">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M3 12h2l2-6 3 12 3-9 2 6 2-3h4"/></svg></span>
+    <span>Tone Generator</span>
+  </a>
+  <nav class="top-nav">
+    <a href="/">Generator</a>
+    <a href="/hearing-test.html">Hearing Test</a>
+    <a href="/beat-maker.html">Studio</a>
+    <a href="/chord-builder.html">Chords</a>
+    <a href="/metronome.html">Metronome</a>
+    <a href="/ear-training.html">Ear Training</a>
+    <a href="/noise-machine.html">Focus</a>
+    <a href="/spectrogram.html" class="active">Spectrogram</a>
+  </nav>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="eyebrow"><span class="dot"></span> Microphone required · audio stays on your device</div>
+    <h1>Live <span>Spectrogram</span></h1>
+    <p>See every frequency in your voice or instrument in real time. The spectrogram scrolls left showing frequency vs time — brighter = louder. Hover to identify any frequency.</p>
+  </div>
+
+  <div class="card">
+    <div class="controls">
+      <button class="btn primary" id="start-btn">🎙 Start Microphone</button>
+      <span class="status" id="status"><span class="dot"></span> Not active</span>
+      <div class="ctl-group" style="margin-left:auto">
+        <label>View</label>
+        <select id="view-sel">
+          <option value="spectrogram">Spectrogram (scroll)</option>
+          <option value="spectrum">Spectrum (bars)</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+      <div class="ctl-group">
+        <label>Scale</label>
+        <select id="scale-sel">
+          <option value="log" selected>Log (musical)</option>
+          <option value="linear">Linear</option>
+        </select>
+      </div>
+      <div class="ctl-group">
+        <label>Gain</label>
+        <input type="range" id="gain-sl" min="1" max="10" step="0.1" value="3"/>
+      </div>
+      <div class="ctl-group">
+        <label>Color</label>
+        <select id="color-sel">
+          <option value="plasma">Plasma</option>
+          <option value="green">Green</option>
+          <option value="cool">Cool</option>
+        </select>
+      </div>
+    </div>
+
+    <canvas id="spectrogram-canvas" width="1200" height="280"></canvas>
+    <canvas id="scope-canvas" width="1200" height="100"></canvas>
+
+    <div class="freq-readout">
+      <div class="freq-big" id="cursor-hz">—</div>
+      <div>
+        <div class="freq-note" id="cursor-note">Hover canvas</div>
+        <div class="freq-detail" id="cursor-detail">Move mouse over the spectrogram to read frequency</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px">Detected Peaks</div>
+    <div class="peak-list" id="peak-list">
+      <div style="color:var(--muted);font-size:13px;grid-column:1/-1">Start the microphone to detect frequency peaks.</div>
+    </div>
+  </div>
+
+  <div class="info-boxes">
+    <div class="info-box">🎵 <strong>How to read it:</strong> The X-axis is time (scrolling left). The Y-axis is frequency — low notes at the bottom, high notes at the top. Brightness shows how loud each frequency is at that moment.</div>
+    <div class="info-box">🎸 <strong>Try it with:</strong> Sing a vowel and watch the harmonics stack up. Strum a guitar string and see it ring out. Whistle to see a thin bright line. Clap to see wideband noise.</div>
+    <div class="info-box">🔬 <strong>Harmonics:</strong> When you sing a note, you'll see bright lines at the fundamental frequency AND at 2×, 3×, 4× that frequency. These overtones are what make your voice sound like <em>you</em>.</div>
+  </div>
+</main>
+
+<footer style="max-width:1200px;margin:40px auto 24px;padding:0 20px;color:var(--muted);font-size:12.5px;text-align:center">
+  Runs in your browser · No uploads · No tracking · Audio never leaves your device
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+let AC = null, stream = null, source = null, analyser = null, gainNode = null;
+let running = false;
+let animId = null;
+
+const specCanvas = document.getElementById('spectrogram-canvas');
+const specCtx = specCanvas.getContext('2d');
+const scopeCanvas = document.getElementById('scope-canvas');
+const scopeCtx = scopeCanvas.getContext('2d');
+
+// Spectrogram scroll buffer
+let spectrogramBuffer = null;
+
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function freqToNote(freq) {
+  if (freq < 20) return '—';
+  const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+  const note = NOTE_NAMES[((midi % 12) + 12) % 12];
+  const oct = Math.floor(midi / 12) - 1;
+  const cents = Math.round((69 + 12 * Math.log2(freq / 440) - midi) * 100);
+  return { name: note + oct, cents };
+}
+
+function getColorMap(scheme, t) {
+  t = Math.max(0, Math.min(1, t));
+  if (scheme === 'green') {
+    const g = Math.round(t * 255);
+    return `rgb(0,${g},${Math.round(t*80)})`;
+  }
+  if (scheme === 'cool') {
+    const r = Math.round(t * 100 + (1-t)*20);
+    const g = Math.round(t * 180);
+    const b = Math.round(t * 255);
+    return `rgb(${r},${g},${b})`;
+  }
+  // Plasma
+  const r = Math.round(Math.min(255, t < 0.5 ? t*2*120 : 120+(t-0.5)*2*135));
+  const g = Math.round(t < 0.5 ? t*2*20 : 20+(t-0.5)*2*220);
+  const b = Math.round(t < 0.5 ? 150+t*2*50 : 200-(t-0.5)*2*200);
+  return `rgb(${r},${g},${b})`;
+}
+
+async function startMic() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    source = AC.createMediaStreamSource(stream);
+    gainNode = AC.createGain(); gainNode.gain.value = +document.getElementById('gain-sl').value;
+    analyser = AC.createAnalyser();
+    analyser.fftSize = 4096;
+    analyser.smoothingTimeConstant = 0.7;
+    source.connect(gainNode); gainNode.connect(analyser);
+
+    running = true;
+    document.getElementById('start-btn').textContent = '⏹ Stop';
+    document.getElementById('start-btn').classList.remove('primary');
+    document.getElementById('start-btn').style.background='linear-gradient(135deg,#b91c1c,#ef4444)';
+    document.getElementById('status').className='status active';
+    document.getElementById('status').innerHTML='<span class="dot"></span> Live';
+
+    // Init scroll buffer
+    spectrogramBuffer = document.createElement('canvas');
+    spectrogramBuffer.width = specCanvas.width;
+    spectrogramBuffer.height = specCanvas.height;
+
+    drawLoop();
+  } catch(e) {
+    toast('Microphone access denied. Please allow mic access and try again.');
+  }
+}
+
+function stopMic() {
+  running = false;
+  cancelAnimationFrame(animId);
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (AC) AC.close();
+  stream = null; AC = null; source = null; analyser = null;
+  document.getElementById('start-btn').textContent = '🎙 Start Microphone';
+  document.getElementById('start-btn').style.background='';
+  document.getElementById('start-btn').classList.add('primary');
+  document.getElementById('status').className='status';
+  document.getElementById('status').innerHTML='<span class="dot"></span> Not active';
+}
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  if (running) stopMic(); else startMic();
+});
+
+document.getElementById('gain-sl').addEventListener('input', e => {
+  if (gainNode) gainNode.gain.value = +e.target.value;
+});
+
+let lastPeakUpdate = 0;
+
+function drawLoop() {
+  animId = requestAnimationFrame(drawLoop);
+  if (!analyser) return;
+
+  const fftSize = analyser.frequencyBinCount;
+  const freqData = new Uint8Array(fftSize);
+  const timeData = new Uint8Array(analyser.fftSize);
+  analyser.getByteFrequencyData(freqData);
+  analyser.getByteTimeDomainData(timeData);
+
+  const view = document.getElementById('view-sel').value;
+  const scale = document.getElementById('scale-sel').value;
+  const color = document.getElementById('color-sel').value;
+  const dpr = window.devicePixelRatio || 1;
+
+  // Resize canvases to actual display size
+  const W = specCanvas.clientWidth * dpr;
+  const H = specCanvas.clientHeight * dpr;
+  if (specCanvas.width !== W) { specCanvas.width = W; spectrogramBuffer.width = W; }
+  if (specCanvas.height !== H) { specCanvas.height = H; spectrogramBuffer.height = H; }
+
+  if (view === 'spectrogram' || view === 'both') {
+    drawSpectrogram(freqData, W, H, scale, color);
+  }
+  if (view === 'spectrum' || view === 'both') {
+    drawSpectrum(freqData, W, view === 'both' ? H * 0.4 : H, scale, color);
+  }
+
+  drawScope(timeData);
+
+  // Peak detection (every 200ms)
+  if (performance.now() - lastPeakUpdate > 200) {
+    lastPeakUpdate = performance.now();
+    detectPeaks(freqData);
+  }
+}
+
+function freqToX(freq, W, scale) {
+  const nyquist = AC.sampleRate / 2;
+  if (scale === 'log') {
+    const logMin = Math.log10(20), logMax = Math.log10(nyquist);
+    return (Math.log10(Math.max(20, freq)) - logMin) / (logMax - logMin) * W;
+  }
+  return (freq / nyquist) * W;
+}
+
+function binToFreq(bin) {
+  return bin * (AC.sampleRate / 2) / analyser.frequencyBinCount;
+}
+
+function drawSpectrogram(freqData, W, H, scale, colorScheme) {
+  const bufCtx = spectrogramBuffer.getContext('2d');
+  // Scroll left by 1 pixel
+  bufCtx.drawImage(spectrogramBuffer, -1, 0);
+  // Draw new column on the right
+  const nyquist = AC.sampleRate / 2;
+  const col = specCanvas.width - 1;
+  for (let i = 0; i < freqData.length; i++) {
+    const freq = binToFreq(i);
+    if (freq < 20 || freq > nyquist) continue;
+    const y0 = H - freqToX(freq, H, scale);
+    const y1 = H - freqToX(binToFreq(i+1), H, scale);
+    const val = freqData[i] / 255;
+    if (val < 0.02) continue;
+    bufCtx.fillStyle = getColorMap(colorScheme, val);
+    bufCtx.fillRect(col, Math.min(y0,y1), 1, Math.max(1, Math.abs(y1-y0)+1));
+  }
+  specCtx.drawImage(spectrogramBuffer, 0, 0);
+  // Freq axis labels
+  drawFreqAxis(specCtx, W, H, scale);
+}
+
+function drawSpectrum(freqData, W, H, scale, colorScheme) {
+  const offsetY = specCanvas.height - H;
+  specCtx.clearRect(0, offsetY, W, H);
+  specCtx.fillStyle = 'rgba(0,0,0,0.6)';
+  specCtx.fillRect(0, offsetY, W, H);
+  const barW = Math.max(1, W / freqData.length * 2);
+  for (let i = 0; i < freqData.length; i++) {
+    const freq = binToFreq(i);
+    if (freq < 20) continue;
+    const x = freqToX(freq, W, scale);
+    const h = (freqData[i] / 255) * H;
+    const grad = specCtx.createLinearGradient(0, offsetY + H - h, 0, offsetY + H);
+    grad.addColorStop(0, '#7c5cff'); grad.addColorStop(1, '#19c2c6');
+    specCtx.fillStyle = grad;
+    specCtx.fillRect(x, offsetY + H - h, barW, h);
+  }
+}
+
+function drawFreqAxis(ctx, W, H, scale) {
+  const labels = [50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+  ctx.fillStyle = 'rgba(138,147,166,0.7)';
+  ctx.font = '10px Inter, sans-serif';
+  ctx.textAlign = 'left';
+  labels.forEach(f => {
+    const y = H - freqToX(f, H, scale);
+    if (y < 8 || y > H - 4) return;
+    ctx.fillStyle = 'rgba(35,42,58,0.8)';
+    ctx.fillRect(0, y - 1, 38, 12);
+    ctx.fillStyle = 'rgba(138,147,166,0.9)';
+    ctx.fillText(f >= 1000 ? (f/1000)+'k' : f+'', 2, y + 9);
+  });
+}
+
+function drawScope(timeData) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = scopeCanvas.clientWidth * dpr;
+  const H = scopeCanvas.clientHeight * dpr;
+  if (scopeCanvas.width !== W) scopeCanvas.width = W;
+  if (scopeCanvas.height !== H) scopeCanvas.height = H;
+  const w = W, h = H;
+  scopeCtx.clearRect(0, 0, w, h);
+  scopeCtx.fillStyle = 'rgba(11,13,18,0.7)';
+  scopeCtx.fillRect(0, 0, w, h);
+  scopeCtx.lineWidth = 1.5;
+  const grad = scopeCtx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, '#7c5cff'); grad.addColorStop(1, '#19c2c6');
+  scopeCtx.strokeStyle = grad;
+  scopeCtx.beginPath();
+  const slice = w / timeData.length;
+  for (let i = 0; i < timeData.length; i++) {
+    const v = (timeData[i] - 128) / 128;
+    const y = h/2 + v * h * 0.42;
+    if (i === 0) scopeCtx.moveTo(0, y); else scopeCtx.lineTo(i * slice, y);
+  }
+  scopeCtx.stroke();
+}
+
+function detectPeaks(freqData) {
+  const peaks = [];
+  const threshold = 80;
+  const minDist = 5;
+  for (let i = 2; i < freqData.length - 2; i++) {
+    if (freqData[i] > threshold &&
+        freqData[i] >= freqData[i-1] && freqData[i] >= freqData[i+1] &&
+        freqData[i] >= freqData[i-2] && freqData[i] >= freqData[i+2]) {
+      const freq = binToFreq(i);
+      if (freq < 30 || freq > 18000) continue;
+      if (peaks.length && freq - peaks[peaks.length-1].freq < (freq * 0.05)) continue;
+      const noteInfo = freqToNote(freq);
+      peaks.push({ freq, amp: freqData[i], note: noteInfo });
+    }
+  }
+  peaks.sort((a,b) => b.amp - a.amp);
+  const top = peaks.slice(0, 8);
+  const pl = document.getElementById('peak-list');
+  if (!top.length) { pl.innerHTML = '<div style="color:var(--muted);font-size:13px;grid-column:1/-1">No strong peaks detected. Make a sound!</div>'; return; }
+  pl.innerHTML = '';
+  top.forEach(p => {
+    const d = document.createElement('div'); d.className = 'peak-item';
+    d.innerHTML = `<div class="ph">${p.freq >= 1000 ? (p.freq/1000).toFixed(2)+'k' : Math.round(p.freq)} Hz</div><div class="pn">${p.note.name} ${p.note.cents !== 0 ? (p.note.cents > 0 ? '+' : '') + p.note.cents + '¢' : '±0¢'}</div>`;
+    pl.appendChild(d);
+  });
+}
+
+// Mouse hover on spectrogram
+specCanvas.addEventListener('mousemove', e => {
+  if (!AC || !analyser) return;
+  const rect = specCanvas.getBoundingClientRect();
+  const y = (e.clientY - rect.top) / rect.height;
+  const scale = document.getElementById('scale-sel').value;
+  const nyquist = AC.sampleRate / 2;
+  let freq;
+  if (scale === 'log') {
+    const logMin = Math.log10(20), logMax = Math.log10(nyquist);
+    freq = Math.pow(10, logMin + (1 - y) * (logMax - logMin));
+  } else {
+    freq = (1 - y) * nyquist;
+  }
+  document.getElementById('cursor-hz').textContent = freq >= 1000 ? (freq/1000).toFixed(2)+' kHz' : Math.round(freq)+' Hz';
+  const noteInfo = freqToNote(freq);
+  document.getElementById('cursor-note').textContent = noteInfo.name || '—';
+  document.getElementById('cursor-detail').textContent = noteInfo.cents !== undefined
+    ? (noteInfo.cents === 0 ? 'Perfect pitch' : (noteInfo.cents > 0 ? '+' : '') + noteInfo.cents + ' cents from ' + noteInfo.name)
+    : '';
+});
+
+function toast(msg) {
+  const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+})();
+</script>
+</body>
+</html>

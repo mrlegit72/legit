@@ -215,9 +215,14 @@
     <span>Tone Generator</span>
   </a>
   <nav class="top-nav">
-    <a href="#" class="active">Generator</a>
+    <a href="/" class="active">Generator</a>
     <a href="/hearing-test.html">Hearing Test</a>
-    <a href="/beat-maker.html">Beat Maker</a>
+    <a href="/beat-maker.html">Studio</a>
+    <a href="/chord-builder.html">Chords</a>
+    <a href="/metronome.html">Metronome</a>
+    <a href="/ear-training.html">Ear Training</a>
+    <a href="/noise-machine.html">Focus</a>
+    <a href="/spectrogram.html">Spectrogram</a>
     <a href="#features">About</a>
     <span class="midi-pill" id="midi-pill"><span class="dot"></span><span id="midi-text">MIDI off</span></span>
   </nav>
@@ -1370,11 +1375,4 @@ refreshBinUI();
 readUrlState();
 initMIDI();
 // Pre-warm audio on first interaction
-window.addEventListener('pointerdown', () => ensureAudio(), { once: true });
-window.addEventListener('keydown', () => ensureAudio(), { once: true });
-
-})();
-</script>
-
-</body>
-</html>
+windo
