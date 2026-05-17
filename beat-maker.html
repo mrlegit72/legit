@@ -80,6 +80,15 @@ select.t-sel{background:var(--panel2);border:1px solid var(--line);color:var(--t
 [data-di="2"] .ds.on{background:linear-gradient(135deg,#f59e0b,#d97706)}
 [data-di="3"] .ds.on{background:linear-gradient(135deg,#fb923c,#ea580c)}
 [data-di="4"] .ds.on{background:linear-gradient(135deg,#22c55e,#16a34a)}
+[data-di="5"] .ds.on{background:linear-gradient(135deg,#e879f9,#c026d3)}
+[data-di="6"] .ds.on{background:linear-gradient(135deg,#f43f5e,#be123c)}
+.genre-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:rgba(255,255,255,.01);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px}
+.genre-row > .g-label{font-size:12px;color:var(--muted);flex-shrink:0}
+.gbtn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-family:inherit;transition:all .12s;min-width:74px}
+.gbtn:hover{border-color:var(--accent2);background:rgba(25,194,198,.08)}
+.gbtn-icon{font-size:18px;line-height:1.2}
+.gbtn-name{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.05em}
+.gbtn-bpm{font-size:10px;color:var(--muted)}
 .drum-vol{-webkit-appearance:none;width:60px;height:4px;border-radius:2px;background:var(--line2);accent-color:var(--accent);cursor:pointer}
 .mute-btn,.solo-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .1s}
 .mute-btn.on{background:rgba(245,158,11,.2);border-color:var(--warn);color:var(--warn)}
@@ -243,6 +252,19 @@ select.t-sel{background:var(--panel2);border:1px solid var(--line);color:var(--t
   <button class="pbtn" id="load-slot-btn">📂 Load slot</button>
 </div>
 
+<!-- GENRE PRESETS -->
+<div class="genre-row">
+  <span class="g-label">Genre:</span>
+  <button class="gbtn" data-genre="amapiano"><span class="gbtn-icon">🪵</span><span class="gbtn-name">Amapiano</span><span class="gbtn-bpm">100 BPM</span></button>
+  <button class="gbtn" data-genre="afrobeats"><span class="gbtn-icon">🌍</span><span class="gbtn-name">Afrobeats</span><span class="gbtn-bpm">107 BPM</span></button>
+  <button class="gbtn" data-genre="reggae"><span class="gbtn-icon">🎸</span><span class="gbtn-name">Reggae</span><span class="gbtn-bpm">75 BPM</span></button>
+  <button class="gbtn" data-genre="dancehall"><span class="gbtn-icon">💃</span><span class="gbtn-name">Dancehall</span><span class="gbtn-bpm">90 BPM</span></button>
+  <button class="gbtn" data-genre="trap"><span class="gbtn-icon">🔊</span><span class="gbtn-name">Trap</span><span class="gbtn-bpm">140 BPM</span></button>
+  <button class="gbtn" data-genre="rnb"><span class="gbtn-icon">✨</span><span class="gbtn-name">R&amp;B</span><span class="gbtn-bpm">85 BPM</span></button>
+  <button class="gbtn" data-genre="hiphop2"><span class="gbtn-icon">🎤</span><span class="gbtn-name">Hip-Hop</span><span class="gbtn-bpm">90 BPM</span></button>
+  <button class="gbtn" data-genre="house2"><span class="gbtn-icon">🎛️</span><span class="gbtn-name">House</span><span class="gbtn-bpm">126 BPM</span></button>
+</div>
+
 <!-- DRUMS -->
 <div class="daw-card" id="drums-card">
   <div class="daw-card-header">
@@ -378,7 +400,7 @@ function initAC() {
 function getInput() { initAC(); if (AC.state === 'suspended') AC.resume(); return eqLo; }
 
 // Per-track channel strips
-const TRACK_COUNT = 3 + 5; // 5 drums + 3 melody
+const TRACK_COUNT = 3 + 7; // 7 drums + 3 melody
 const chGains = []; // one gain per track
 const chPans  = []; // stereo panner per track
 const muteSt  = new Array(TRACK_COUNT).fill(false);
@@ -469,12 +491,62 @@ function playClap(when, ti) {
   }
 }
 
+// Log Drum — Amapiano signature (deep wooden punch)
+function playLogDrum(when, ti) {
+  const ac = AC; const out = drumOut(ti);
+  // Wooden transient
+  const len = ac.sampleRate * 0.06;
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const filt = ac.createBiquadFilter(); filt.type = 'bandpass';
+  filt.frequency.value = 380; filt.Q.value = 1.8;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(1.0, when);
+  g.gain.exponentialRampToValueAtTime(0.001, when + 0.055);
+  src.connect(filt); filt.connect(g); g.connect(out);
+  src.start(when); src.stop(when + 0.07);
+  // Deep resonant body
+  const o = ac.createOscillator(); const og = ac.createGain();
+  o.frequency.setValueAtTime(230, when);
+  o.frequency.exponentialRampToValueAtTime(52, when + 0.1);
+  og.gain.setValueAtTime(1.1, when);
+  og.gain.exponentialRampToValueAtTime(0.001, when + 0.32);
+  o.connect(og); og.connect(out);
+  o.start(when); o.stop(when + 0.35);
+}
+
+// Rimshot — sharp crack (reggae skank / offbeat accent)
+function playRimshot(when, ti) {
+  const ac = AC; const out = drumOut(ti);
+  const len = ac.sampleRate * 0.04;
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const filt = ac.createBiquadFilter(); filt.type = 'bandpass';
+  filt.frequency.value = 2600; filt.Q.value = 1.0;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.85, when);
+  g.gain.exponentialRampToValueAtTime(0.001, when + 0.04);
+  src.connect(filt); filt.connect(g); g.connect(out);
+  src.start(when); src.stop(when + 0.05);
+  const o = ac.createOscillator(); const og = ac.createGain();
+  o.frequency.value = 420;
+  og.gain.setValueAtTime(0.35, when);
+  og.gain.exponentialRampToValueAtTime(0.001, when + 0.06);
+  o.connect(og); og.connect(out);
+  o.start(when); o.stop(when + 0.07);
+}
+
 const DRUM_FNS = [
   (w,t)=>playKick(w,t), (w,t)=>playSnare(w,t), (w,t)=>playHat(w,false,t),
-  (w,t)=>playHat(w,true,t), (w,t)=>playClap(w,t)
+  (w,t)=>playHat(w,true,t), (w,t)=>playClap(w,t),
+  (w,t)=>playLogDrum(w,t), (w,t)=>playRimshot(w,t)
 ];
-const DRUM_NAMES = ['Kick','Snare','Hi-Hat','Open Hat','Clap'];
-const DRUM_COLORS = ['#7c5cff','#19c2c6','#f59e0b','#fb923c','#22c55e'];
+const DRUM_NAMES = ['Kick','Snare','Hi-Hat','Open Hat','Clap','Log Drum','Rimshot'];
+const DRUM_COLORS = ['#7c5cff','#19c2c6','#f59e0b','#fb923c','#22c55e','#e879f9','#f43f5e'];
 
 // ─────────────────────────────────────────────────────
 // NOTE FREQUENCIES
@@ -516,7 +588,7 @@ const melodyState = MELODY_DEFS.map(d => ({
   reverbWet: null, reverbDry: null, delayNode: null, delayFb: null, delayWet: null, filterNode: null,
 }));
 
-function getMelodyOut(ti) { return trackInput(5 + ti); } // tracks 5,6,7 for melody
+function getMelodyOut(ti) { return trackInput(7 + ti); } // tracks 7,8,9 for melody
 
 function buildMelodyFX(ti) {
   initAC(); const ms = melodyState[ti]; const out = getMelodyOut(ti);
@@ -560,25 +632,101 @@ function playMelodyNote(ti, freq, when) {
   initAC();
   const ms = melodyState[ti];
   if (!ms._input) buildMelodyFX(ti);
-  const osc = AC.createOscillator();
-  const env = AC.createGain();
-  osc.type = ms.wave;
-  osc.frequency.value = freq;
   const atk = ms.attack, rel = ms.release;
   const stepDur = (60 / seq.bpm / 4) * 0.9;
-  env.gain.setValueAtTime(0, when);
-  env.gain.linearRampToValueAtTime(0.35, when + atk);
-  env.gain.setValueAtTime(0.35, when + stepDur - rel * 0.5);
-  env.gain.linearRampToValueAtTime(0, when + stepDur + rel);
-  osc.connect(env); env.connect(ms._input);
-  osc.start(when); osc.stop(when + stepDur + rel + 0.05);
+
+  if (ms.wave === 'piano') {
+    // Additive piano: multiple harmonics with fast decay
+    const harmonics = [1, 2, 3, 4, 5, 6];
+    const ampRatios = [1, 0.5, 0.25, 0.12, 0.06, 0.03];
+    const mG = AC.createGain();
+    mG.gain.setValueAtTime(0, when);
+    mG.gain.linearRampToValueAtTime(0.28, when + 0.004);
+    mG.gain.exponentialRampToValueAtTime(0.14, when + stepDur * 0.45);
+    mG.gain.exponentialRampToValueAtTime(0.001, when + stepDur + rel);
+    mG.connect(ms._input);
+    harmonics.forEach((h, i) => {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = 'sine'; o.frequency.value = freq * h;
+      g.gain.value = ampRatios[i];
+      o.connect(g); g.connect(mG);
+      o.start(when); o.stop(when + stepDur + rel + 0.05);
+    });
+
+  } else if (ms.wave === 'epiano') {
+    // FM Electric Piano (Rhodes-style)
+    const carrier = AC.createOscillator();
+    const mod = AC.createOscillator();
+    const modG = AC.createGain();
+    const env = AC.createGain();
+    carrier.type = 'sine'; carrier.frequency.value = freq;
+    mod.type = 'sine'; mod.frequency.value = freq * 2.756;
+    modG.gain.setValueAtTime(freq * 2.8, when);
+    modG.gain.exponentialRampToValueAtTime(freq * 0.04, when + stepDur + rel);
+    env.gain.setValueAtTime(0, when);
+    env.gain.linearRampToValueAtTime(0.28, when + 0.003);
+    env.gain.exponentialRampToValueAtTime(0.12, when + stepDur * 0.5);
+    env.gain.exponentialRampToValueAtTime(0.001, when + stepDur + rel + 0.3);
+    mod.connect(modG); modG.connect(carrier.frequency);
+    carrier.connect(env); env.connect(ms._input);
+    mod.start(when); carrier.start(when);
+    const stop = when + stepDur + rel + 0.35;
+    mod.stop(stop); carrier.stop(stop);
+
+  } else if (ms.wave === 'organ') {
+    // Additive organ (Hammond drawbar-style)
+    const env = AC.createGain();
+    env.gain.setValueAtTime(0, when);
+    env.gain.linearRampToValueAtTime(0.25, when + 0.008);
+    env.gain.setValueAtTime(0.25, when + stepDur - 0.01);
+    env.gain.linearRampToValueAtTime(0, when + stepDur + 0.02);
+    env.connect(ms._input);
+    [1, 2, 3, 4].forEach((h, i) => {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = 'sine'; o.frequency.value = freq * h;
+      g.gain.value = [0.5, 0.28, 0.18, 0.1][i];
+      o.connect(g); g.connect(env);
+      o.start(when); o.stop(when + stepDur + 0.05);
+    });
+
+  } else if (ms.wave === 'pad') {
+    // Slow-attack lush pad (triangle + slight detune)
+    const env = AC.createGain();
+    const slowAtk = Math.max(atk, 0.12);
+    env.gain.setValueAtTime(0, when);
+    env.gain.linearRampToValueAtTime(0.28, when + slowAtk);
+    env.gain.setValueAtTime(0.28, when + stepDur - 0.06);
+    env.gain.linearRampToValueAtTime(0, when + stepDur + 0.18);
+    env.connect(ms._input);
+    [-3, 0, 3].forEach(cents => {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.type = 'triangle';
+      o.frequency.value = freq * Math.pow(2, cents / 1200);
+      g.gain.value = 0.33;
+      o.connect(g); g.connect(env);
+      o.start(when); o.stop(when + stepDur + 0.25);
+    });
+
+  } else {
+    // Standard oscillator (sine / square / sawtooth / triangle)
+    const osc = AC.createOscillator();
+    const env = AC.createGain();
+    osc.type = ms.wave;
+    osc.frequency.value = freq;
+    env.gain.setValueAtTime(0, when);
+    env.gain.linearRampToValueAtTime(0.35, when + atk);
+    env.gain.setValueAtTime(0.35, when + stepDur - rel * 0.5);
+    env.gain.linearRampToValueAtTime(0, when + stepDur + rel);
+    osc.connect(env); env.connect(ms._input);
+    osc.start(when); osc.stop(when + stepDur + rel + 0.05);
+  }
 }
 
 // ─────────────────────────────────────────────────────
 // SEQUENCER STATE
 // ─────────────────────────────────────────────────────
 const STEPS = 16;
-const drumPat = Array.from({length:5}, () => new Array(STEPS).fill(false));
+const drumPat = Array.from({length:7}, () => new Array(STEPS).fill(false));
 const melodyPat = Array.from({length:3}, () =>
   Array.from({length:STEPS}, () => new Array(16).fill(false))
 );
@@ -780,7 +928,7 @@ function renderPianoRoll(ti) {
   const wvCtrl = document.createElement('div'); wvCtrl.className='pr-ctrl';
   const wvLbl = document.createElement('label'); wvLbl.textContent='Wave'; wvCtrl.appendChild(wvLbl);
   const wvSel = document.createElement('select');
-  ['sine','square','sawtooth','triangle'].forEach(w => { const o=document.createElement('option'); o.value=w; o.textContent=w; if(w===ms.wave) o.selected=true; wvSel.appendChild(o); });
+  ['sine','square','sawtooth','triangle','piano','epiano','organ','pad'].forEach(w => { const o=document.createElement('option'); o.value=w; o.textContent={sine:'Sine',square:'Square',sawtooth:'Saw',triangle:'Triangle',piano:'Piano',epiano:'E.Piano',organ:'Organ',pad:'Pad'}[w]||w; if(w===ms.wave) o.selected=true; wvSel.appendChild(o); });
   wvSel.addEventListener('change', () => { ms.wave = wvSel.value; });
   wvCtrl.appendChild(wvSel); hdr.appendChild(wvCtrl);
 
@@ -855,7 +1003,7 @@ function renderAllPianoRolls() { for (let ti=0;ti<3;ti++) renderPianoRoll(ti); }
 // ─────────────────────────────────────────────────────
 // MIXER UI
 // ─────────────────────────────────────────────────────
-const TRACK_NAMES = ['Kick','Snare','Hi-Hat','Open Hat','Clap','Lead','Bass','Pad'];
+const TRACK_NAMES = ['Kick','Snare','Hi-Hat','Open Hat','Clap','Log Drum','Rimshot','Lead','Bass','Pad'];
 
 function renderMixer() {
   const grid = document.getElementById('mixer-grid'); grid.innerHTML = '';
@@ -1065,11 +1213,309 @@ document.getElementById('share-btn').addEventListener('click', () => {
 const urlP = new URLSearchParams(location.search).get('p');
 if (urlP) decodeState(urlP);
 
+
+// ─────────────────────────────────────────────────────
+// GENRE PRESETS
+// ─────────────────────────────────────────────────────
+// Melody patterns: sparse list of [step, pitchRow] pairs
+// Piano roll rows for octave 4: 0=D#5,1=D5,2=C#5,3=C5,4=B4,5=Bb4,6=A4,
+//   7=Ab4,8=G4,9=F#4,10=F4,11=E4,12=Eb4,13=D4,14=C#4,15=C4
+// Piano roll rows for octave 2 (bass): same semitones 2 octaves lower
+
+function makeMelPat(sparseList) {
+  // sparseList: [[step, pitchRow], ...]
+  const pat = Array.from({length:16}, () => new Array(16).fill(false));
+  sparseList.forEach(([s,p]) => { if(s<16&&p<16) pat[s][p]=true; });
+  return pat;
+}
+
+const GENRE_PRESETS = {
+  amapiano: {
+    bpm: 100,
+    // 7 drum rows: Kick,Snare,HiHat,OpenHat,Clap,LogDrum,Rimshot
+    d: [
+      [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // Kick: beats 1&3
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Snare: 2&4
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // HiHat: 16th rolls
+      [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1], // Open Hat
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Clap
+      [1,0,0,1,0,1,0,0,1,0,0,1,0,1,0,0], // Log Drum: classic amapiano pattern
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Rimshot: off
+    ],
+    // Melody: [trackIndex, wave, octave, sparseNotes]
+    // Track 0 = Piano chords (A minor: A4=r6,C5=r3,E4=r11,G4=r8)
+    mel: [
+      { wave:'piano', oct:4, notes: makeMelPat([
+        [0,6],[0,3],[0,11],   // Am chord: A4,C5,E4
+        [4,8],[4,11],[4,4],   // Em7: G4,E4,B4
+        [8,10],[8,6],[8,3],   // Fmaj7: F4,A4,C5
+        [12,8],[12,11],[12,1], // G add9: G4,E4,D5
+      ]) },
+      { wave:'sine', oct:2, notes: makeMelPat([
+        [0,6],[1,6],          // A bass
+        [4,11],[5,11],        // E bass
+        [8,10],[9,10],        // F bass
+        [12,8],[13,8],        // G bass
+      ]) },
+      { wave:'pad', oct:3, notes: makeMelPat([
+        [0,6],[0,3],          // A pad
+        [8,10],[8,6],         // F pad
+      ]) },
+    ],
+  },
+
+  afrobeats: {
+    bpm: 107,
+    d: [
+      [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0], // Kick: syncopated
+      [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0], // Snare: off-beat
+      [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // HiHat: 8th
+      [0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1], // Open Hat: syncopated
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Clap
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Log Drum: off
+      [0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0], // Rimshot: 2nd 16th of each beat
+    ],
+    mel: [
+      // Track 0: Afrobeats lead melody (C minor pentatonic: C4=r15,Eb4=r12,F4=r10,G4=r8,Bb4=r5)
+      { wave:'epiano', oct:4, notes: makeMelPat([
+        [0,15],[1,12],        // C4, Eb4
+        [3,10],[4,8],         // F4, G4
+        [7,5],[8,15],         // Bb4, C4
+        [10,12],[11,8],       // Eb4, G4
+        [14,10],[15,5],       // F4, Bb4
+      ]) },
+      { wave:'sine', oct:2, notes: makeMelPat([
+        [0,15],[2,15],        // C bass
+        [4,8],[6,8],          // G bass
+        [8,10],[10,10],       // F bass (Bb2 area - use F)
+        [12,5],[14,5],        // Bb bass... using F2 area
+      ]) },
+      { wave:'pad', oct:3, notes: makeMelPat([
+        [0,15],[0,12],        // Cm pad
+        [8,10],[8,8],         // Fm pad
+      ]) },
+    ],
+  },
+
+  reggae: {
+    bpm: 75,
+    d: [
+      [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // Kick: beat 3 only (one drop)
+      [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0], // Snare: beat 2
+      [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // HiHat: 8th
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Open Hat
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Clap
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Log Drum
+      [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // Rimshot: offbeat "skank"
+    ],
+    mel: [
+      // Reggae skank chords (D major: D4=r13,F#4=r9,A4=r6 | G: G4=r8,B4=r4 | A: A4=r6,C#5=r2)
+      { wave:'organ', oct:4, notes: makeMelPat([
+        [2,13],[2,9],[2,6],   // D chord on off-beat
+        [6,8],[6,4],[6,1],    // G chord
+        [10,13],[10,9],[10,6],// D chord
+        [14,6],[14,2],[14,11],// A chord (A,C#,E)
+      ]) },
+      { wave:'sine', oct:2, notes: makeMelPat([
+        [0,13],[1,13],        // D bass
+        [4,8],[5,13],         // G bass with passing D
+        [8,13],[9,11],        // D bass with E
+        [12,6],[13,11],       // A bass
+      ]) },
+      { wave:'pad', oct:3, notes: makeMelPat([
+        [0,13],[0,9],         // D pad
+        [8,8],[8,4],          // G pad
+      ]) },
+    ],
+  },
+
+  dancehall: {
+    bpm: 90,
+    d: [
+      [1,0,0,1,0,0,1,0,0,0,1,0,0,1,0,0], // Kick: dembow-style
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Snare
+      [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // HiHat
+      [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1], // Open Hat
+      [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // Clap: offbeat
+      [1,0,0,1,0,1,0,0,1,0,0,1,0,0,1,0], // Log Drum: heavy pattern
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ],
+    mel: [
+      { wave:'piano', oct:4, notes: makeMelPat([
+        [0,8],[0,4],          // Gm/B
+        [4,5],[4,8],          // Bb, G
+        [8,10],[8,6],         // F, A
+        [12,13],[12,8],       // D, G
+      ]) },
+      { wave:'sine', oct:2, notes: makeMelPat([
+        [0,8],[2,8],          // G bass
+        [4,5],[6,5],          // Bb bass
+        [8,10],[10,10],       // F bass
+        [12,13],[14,13],      // D bass
+      ]) },
+      { wave:'pad', oct:3, notes: makeMelPat([
+        [0,8],[0,5],          // Gm pad
+        [8,10],[8,6],         // Fm pad
+      ]) },
+    ],
+  },
+
+  trap: {
+    bpm: 140,
+    d: [
+      [1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0], // Kick: trap pattern
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Snare
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // HiHat: 16th rolls
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1], // Open Hat: last 16th
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Clap
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // Log Drum: off
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ],
+    mel: [
+      // Trap: minor melody (F# minor: F#4=r9, A4=r6, C#5=r2, E4=r11, B4=r4)
+      { wave:'sawtooth', oct:4, notes: makeMelPat([
+        [0,9],                // F#4
+        [3,6],                // A4
+        [5,9],                // F#4
+        [7,11],               // E4
+        [8,4],                // B4
+        [11,2],               // C#5
+        [13,9],               // F#4
+        [15,6],               // A4
+      ]) },
+      { wave:'sine', oct:2, notes: makeMelPat([
+        [0,9],[0,9],          // F#2 (bass hit on 1)
+        [8,4],                // B2
+      ]) },
+      { wave:'pad', oct:3, notes: makeMelPat([
+        [0,9],[0,6],          // F#m pad
+        [8,4],[8,11],         // Bm pad
+      ]) },
+    ],
+  },
+
+  rnb: {
+    bpm: 85,
+    d: [
+      [1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0], // Kick: smooth syncopated
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1], // Snare with ghost
+      [1,0,1,1,0,1,0,1,1,0,1,0,1,1,0,1], // HiHat: shuffled
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], // Clap
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ],
+    mel: [
+      // R&B: smooth Bbmaj7 feel (Bb4=r5, D5=r1, F4=r10, A4=r6, C5=r3, G4=r8)
+      { wave:'epiano', oct:4, notes: makeMelPat([
+        [0,5],[0,1],[0,10],   // Bbmaj7: Bb4, D5, F4
+        [4,3],[4,6],[4,1],    // Cm7: C5, A4, D5
+        [8,10],[8,6],[8,3],   // Fmaj: F4, A4, C5
+        [12,8],[12,5],[12,1], // Gm7: G4, Bb4, D5
+      ]) },
+      { wave:'sine', oct:2, notes: makeMelPat([
+        [0,5],[1,5],[2,5],    // Bb bass walk
+        [4,3],[5,3],          // C bass
+        [8,10],[9,10],        // F bass
+        [12,8],[13,8],[14,5], // G→Bb walk
+      ]) },
+      { wave:'pad', oct:3, notes: makeMelPat([
+        [0,5],[0,10],         // Bb pad
+        [8,10],[8,6],         // F pad
+      ]) },
+    ],
+  },
+
+  hiphop2: {
+    bpm: 90,
+    d: [
+      [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0], // Kick: boom bap
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ],
+    mel: [
+      // Hip-Hop: minor key, choppy melody (Am: A4=r6, C5=r3, E4=r11, D4=r13, G4=r8)
+      { wave:'piano', oct:4, notes: makeMelPat([
+        [0,6],[2,3],[4,11],[6,13],
+        [8,8],[10,6],[12,11],[14,3],
+      ]) },
+      { wave:'sine', oct:2, notes: makeMelPat([
+        [0,6],[4,8],[8,10],[12,6],
+      ]) },
+      { wave:'pad', oct:3, notes: makeMelPat([
+        [0,6],[0,3],[8,10],[8,6],
+      ]) },
+    ],
+  },
+
+  house2: {
+    bpm: 126,
+    d: [
+      [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], // Kick: 4 on the floor
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,1],
+      [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    ],
+    mel: [
+      // House: driving synth lead (G minor: G4=r8, Bb4=r5, D5=r1, F4=r10, A4=r6)
+      { wave:'sawtooth', oct:4, notes: makeMelPat([
+        [0,8],[2,5],[4,8],[6,5],
+        [8,1],[10,8],[12,10],[14,5],
+      ]) },
+      { wave:'sine', oct:2, notes: makeMelPat([
+        [0,8],[4,5],[8,10],[12,8],
+      ]) },
+      { wave:'pad', oct:3, notes: makeMelPat([
+        [0,8],[0,5],[8,10],[8,6],
+      ]) },
+    ],
+  },
+};
+
+function loadGenrePreset(name) {
+  const p = GENRE_PRESETS[name]; if (!p) return;
+  // Set BPM
+  seq.bpm = p.bpm;
+  document.getElementById('bpm-sl').value = p.bpm;
+  document.getElementById('bpm-num').textContent = p.bpm;
+  // Load drum patterns (7 rows)
+  p.d.forEach((row, i) => {
+    if (i < drumPat.length) drumPat[i] = row.map(v => !!v);
+  });
+  // Load melody patterns + synth settings
+  p.mel.forEach((trk, ti) => {
+    if (ti < melodyState.length) {
+      melodyState[ti].wave = trk.wave;
+      melodyState[ti].oct = trk.oct;
+      melodyState[ti].pitchRows = getPitchRow(trk.oct);
+      // Copy notes
+      for (let s = 0; s < 16; s++) {
+        for (let pr = 0; pr < 16; pr++) {
+          melodyPat[ti][s][pr] = trk.notes[s][pr];
+        }
+      }
+    }
+  });
+  renderDrumGrid();
+  renderAllPianoRolls();
+  toast('Loaded ' + name.charAt(0).toUpperCase() + name.slice(1).replace('2','') + ' preset 🎵');
+}
+
 // ─────────────────────────────────────────────────────
 // PRESETS BUTTONS
 // ─────────────────────────────────────────────────────
 document.querySelectorAll('[data-preset]').forEach(btn => {
   btn.addEventListener('click', () => loadPreset(btn.dataset.preset));
+});
+document.querySelectorAll('[data-genre]').forEach(btn => {
+  btn.addEventListener('click', () => loadGenrePreset(btn.dataset.genre));
 });
 
 // ─────────────────────────────────────────────────────
