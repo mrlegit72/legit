@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="A 90-second in-browser hearing test. Find your personal audible frequency range, get an audiogram, and see how it compares to typical hearing for your age." />
+<meta property="og:title" content="Hearing Test — How well do you actually hear?" />
+<meta property="og:description" content="A 90-second test that maps your personal hearing range and estimates your auditory age." />
+<meta property="og:type" content="website" />
+<title>Hearing Test — How well do you actually hear?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0d12;
+    --bg-2: #0f131b;
+    --panel: #141923;
+    --panel-2: #1a2030;
+    --line: #232a3a;
+    --text: #e7ecf3;
+    --muted: #8a93a6;
+    --accent: #7c5cff;
+    --accent-2: #19c2c6;
+    --good: #22c55e;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+    --radius: 14px;
+    --shadow: 0 10px 30px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.25);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 90% -10%, rgba(124,92,255,0.18), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(25,194,198,0.14), transparent 60%),
+      linear-gradient(180deg, var(--bg), var(--bg-2));
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header.site { max-width: 1100px; margin: 0 auto; padding: 22px 20px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.2px; }
+  .brand-mark { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; box-shadow: 0 6px 20px rgba(124,92,255,0.35); }
+  .brand-mark svg { width: 18px; height: 18px; }
+  nav.top-nav { display: flex; align-items: center; gap: 22px; color: var(--muted); }
+  nav.top-nav a { color: var(--muted); }
+  nav.top-nav a:hover { color: var(--text); text-decoration: none; }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  .hero { text-align: center; padding: 36px 0 28px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.02); color: var(--muted); border-radius: 999px; font-size: 12.5px; margin-bottom: 18px; }
+  .eyebrow .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 4px rgba(34,197,94,0.18); }
+  .hero h1 { font-size: clamp(34px, 5.4vw, 56px); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 14px; font-weight: 800; }
+  .hero p.lead { color: var(--muted); font-size: clamp(15px, 1.6vw, 17.5px); max-width: 620px; margin: 0 auto 28px; }
+  .card { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px; }
+  .stack > * + * { margin-top: 14px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+  .btn { appearance: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14.5px; cursor: pointer; transition: transform 0.05s ease, border-color 0.15s ease, background 0.15s ease; font-family: inherit; }
+  .btn:hover { border-color: #36405a; }
+  .btn:active { transform: translateY(1px); }
+  .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .btn.primary { background: linear-gradient(135deg, var(--accent), #5e3eff); border-color: transparent; color: white; box-shadow: 0 8px 24px rgba(124,92,255,0.35); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.success { background: linear-gradient(135deg, #16a34a, #22c55e); border-color: transparent; color: white; }
+  .btn.danger { background: linear-gradient(135deg, #b91c1c, #ef4444); border-color: transparent; color: white; }
+  .btn.ghost { background: transparent; }
+  .btn.lg { padding: 16px 26px; font-size: 16px; border-radius: 14px; }
+  .step { display: none; }
+  .step.active { display: block; }
+  .checklist { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 10px; }
+  .checklist li { display: flex; align-items: flex-start; gap: 10px; color: #c8ceda; }
+  .checklist li::before { content: "✓"; flex: 0 0 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; font-weight: 800; font-size: 13px; margin-top: 1px; }
+  .lr-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .lr-buttons .btn { padding: 24px; font-size: 16px; }
+  .test-display { text-align: center; padding: 18px 0; }
+  .ear-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.025); color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+  .freq-display { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: clamp(56px, 8vw, 96px); font-weight: 700; letter-spacing: -0.02em; line-height: 1; background: linear-gradient(135deg, #fff, #aab3c5); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .freq-display .unit { font-size: 0.35em; color: var(--muted); margin-left: 8px; -webkit-text-fill-color: var(--muted); }
+  .freq-sub { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .visualizer { width: 100%; height: 80px; margin: 18px 0 24px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--line); }
+  .yn-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .yn-buttons .btn { padding: 18px; font-size: 16px; }
+  .replay-row { display: flex; justify-content: center; margin-top: 12px; }
+  .progress { width: 100%; height: 6px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+  .progress .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); width: 0%; transition: width 0.25s ease; }
+  .progress-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .result-headline { text-align: center; margin-bottom: 22px; }
+  .result-headline .big-number { font-family: 'JetBrains Mono', monospace; font-size: clamp(48px, 7vw, 84px); font-weight: 700; background: linear-gradient(135deg, var(--accent-2), #6cd0ff); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1; }
+  .result-headline .label { color: var(--muted); margin-top: 6px; font-size: 14.5px; }
+  .age-banner { text-align: center; background: linear-gradient(135deg, rgba(124,92,255,0.12), rgba(25,194,198,0.10)); border: 1px solid var(--line); border-radius: 12px; padding: 18px 16px; margin: 18px 0; }
+  .age-banner .age-range { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .age-banner .age-sub { color: var(--muted); font-size: 14px; }
+  #audiogram { width: 100%; height: 280px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid var(--line); margin: 8px 0 4px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 14px; }
+  .stat { border: 1px solid var(--line); background: rgba(255,255,255,0.02); border-radius: 12px; padding: 14px 16px; }
+  .stat .k { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .v { font-weight: 700; font-size: 18px; margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .interpretation { margin-top: 18px; color: #c8ceda; }
+  .interpretation h3 { margin: 18px 0 8px; font-size: 16.5px; }
+  .interpretation .note { border-left: 3px solid var(--accent-2); padding: 8px 12px; background: rgba(25,194,198,0.05); border-radius: 0 8px 8px 0; margin: 8px 0; }
+  .interpretation .note.warn { border-color: var(--warn); background: rgba(245,158,11,0.06); }
+  .interpretation .note.bad { border-color: var(--bad); background: rgba(239,68,68,0.06); }
+  .actions-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+  .disclaimer { margin-top: 28px; color: var(--muted); font-size: 12.5px; text-align: center; }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel); border: 1px solid var(--line); color: var(--text); padding: 10px 16px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; z-index: 100; font-size: 13.5px; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  footer { max-width: 1100px; margin: 40px auto 24px; padding: 0 20px; color: var(--muted); font-size: 13px; text-align: center; }
+  footer a { color: var(--muted); }
+  @media (max-width: 560px) { main { padding: 18px 14px 60px; } .card { padding: 20px; } .lr-buttons .btn { padding: 18px; } }
+  .history { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line); }
+  .history h4 { margin: 0 0 10px; font-size: 13.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .history-list { display: grid; gap: 8px; }
+  .history-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px; }
+  .history-item .date { color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <a class="brand" href="/">
+    <span class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h2l2-6 3 12 3-9 2 6 2-3h4"/></svg>
+    </span>
+    <span>Tone Generator</span>
+  </a>
+  <nav class="top-nav">
+    <a href="/">Generator</a>
+    <a href="/hearing-test.html" style="color: var(--text);">Hearing Test</a>
+  </nav>
+</header>
+
+<main>
+
+  <section id="step-intro" class="step active">
+    <div class="hero">
+      <span class="eyebrow"><span class="dot"></span> 90-second test · runs in your browser · nothing leaves your device</span>
+      <h1>How well do you actually hear?</h1>
+      <p class="lead">Most people have never measured their own hearing. This test sweeps your ears across the full audible range and tells you the highest frequency you can still hear, where your sensitivity drops, and how your hearing compares to a typical curve for your age.</p>
+    </div>
+
+    <div class="card stack">
+      <div>
+        <h2 style="margin: 0 0 6px; font-size: 20px;">Before you begin</h2>
+        <p style="color: var(--muted); margin: 0;">For accurate results, four things matter:</p>
+      </div>
+      <ul class="checklist">
+        <li><strong>Wear headphones or earbuds.</strong> Built-in laptop speakers can't reproduce frequencies above ~16 kHz and miss low bass entirely.</li>
+        <li><strong>Find a quiet room.</strong> Background noise will mask quieter tones and skew your results.</li>
+        <li><strong>Set your system volume to a comfortable level</strong> — not loud. We'll do a calibration step next.</li>
+        <li><strong>Don't crank the volume mid-test.</strong> Some frequencies you can't hear; that's the point. Turning up to "find" them just damages your ears.</li>
+      </ul>
+      <div class="row between" style="margin-top: 22px;">
+        <a href="/" class="btn ghost">← Back to generator</a>
+        <button class="btn primary lg" id="btn-begin">Begin test →</button>
+      </div>
+
+      <div id="history-container" class="history" style="display: none;">
+        <h4>Your saved results</h4>
+        <div class="history-list" id="history-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="step-lr" class="step">
+    <div class="card stack">
+      <h2 style="margin: 0; font-size: 22px;">First — is your left actually left?</h2>
+      <p style="color: var(--muted); margin: 0;">We'll play a tone in only one channel. Tell us which side you heard it on. If it's swapped, swap your headphones before continuing.</p>
+
+      <div style="text-align: center; padding: 24px 0;">
+        <button class="btn primary lg" id="btn-play-lr">▶ Play test tone</button>
+        <div id="lr-prompt" style="color: var(--muted); margin-top: 18px; min-height: 22px;"></div>
+      </div>
+
+      <div class="lr-buttons" id="lr-answer" style="display: none;">
+        <button class="btn" data-lr="left">I heard it on the LEFT</button>
+        <button class="btn" data-lr="right">I heard it on the RIGHT</button>
+      </div>
+
+      <div class="row between" style="margin-top: 8px;">
+        <button class="btn ghost" id="btn-lr-back">← Back</button>
+        <button class="btn" id="btn-lr-skip">Skip channel check →</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="step-calib" class="step">
+    <div class="card stack">
+      <h2 style="margin: 0; font-size: 22px;">Set a comfortable volume</h2>
+      <p style="color: var(--muted); margin: 0;">A 1 kHz tone will play continuously. Adjust your system volume until it sounds clear but quiet — like a calm conversation, not loud music. The test plays softer tones from here on, so set this comfortable, not loud.</p>
+
+      <div style="text-align: center; padding: 16px 0;">
+        <button class="btn primary lg" id="btn-calib-play">▶ Play 1 kHz reference</button>
+      </div>
+
+      <div class="row between" style="margin-top: 8px;">
+        <button class="btn ghost" id="btn-calib-back">← Back</button>
+        <button class="btn primary" id="btn-calib-done">Volume is set — start test →</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="step-test" class="step">
+    <div class="card">
+      <div class="test-display">
+        <div class="ear-badge" id="ear-badge">Both ears</div>
+        <div class="freq-display"><span id="freq-num">—</span><span class="unit" id="freq-unit">Hz</span></div>
+        <div class="freq-sub" id="freq-sub">Listen carefully…</div>
+        <canvas class="visualizer" id="viz" width="800" height="80"></canvas>
+      </div>
+
+      <div class="yn-buttons">
+        <button class="btn danger" id="btn-no">✕ I can't hear it</button>
+        <button class="btn success" id="btn-yes">✓ I hear it</button>
+      </div>
+      <div class="replay-row">
+        <button class="btn ghost" id="btn-replay">↻ Play again</button>
+      </div>
+
+      <div style="margin-top: 22px;">
+        <div class="progress"><div class="fill" id="progress-fill"></div></div>
+        <div class="progress-meta">
+          <span id="progress-text">Tone 1 of 18</span>
+          <span id="progress-pct">0%</span>
+        </div>
+      </div>
+
+      <div class="row between" style="margin-top: 18px;">
+        <button class="btn ghost" id="btn-quit">Quit test</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="step-results" class="step">
+    <div class="card">
+      <div class="result-headline">
+        <div class="big-number"><span id="max-freq">—</span> <span style="font-size: 0.45em; color: var(--muted);">kHz</span></div>
+        <div class="label">Your highest reliably-heard frequency</div>
+      </div>
+
+      <div class="age-banner">
+        <div class="age-range" id="age-range">—</div>
+        <div class="age-sub" id="age-sub">Estimated auditory age band, based on typical presbycusis curves.</div>
+      </div>
+
+      <canvas id="audiogram" width="800" height="280"></canvas>
+
+      <div class="stat-grid" id="stat-grid"></div>
+
+      <div class="interpretation" id="interpretation"></div>
+
+      <div class="actions-row">
+        <button class="btn primary" id="btn-save">💾 Save this result</button>
+        <button class="btn" id="btn-share">↗ Copy shareable link</button>
+        <button class="btn" id="btn-retake">↻ Retake test</button>
+        <a href="/" class="btn ghost">← Back to generator</a>
+      </div>
+
+      <p class="disclaimer">
+        This isn't a clinical hearing test. Browser audio can't be calibrated to real-world SPL, and your headphones, ambient noise, and system settings all affect the result. If you're concerned about your hearing, see an audiologist.
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <a href="/">← Tone Generator</a> · runs in your browser · no tracking · no audio leaves your device
+</footer>
+
+<div class="toast" id="toast">Saved.</div>
+
+<script>
+(() => {
+  'use strict';
+  const FREQS = [125, 250, 500, 1000, 2000, 3000, 4000, 6000, 8000, 10000, 12000, 14000, 15000, 16000, 17000, 18000, 19000, 20000];
+  const state = { audio: null, masterGain: null, osc: null, toneGain: null, analyser: null, currentIdx: 0, answers: [], started: null, finished: null, calibVolume: 0.10 };
+  const $ = (id) => document.getElementById(id);
+  const show = (id) => { document.querySelectorAll('.step').forEach(s => s.classList.remove('active')); $(id).classList.add('active'); };
+  const toast = (msg) => { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800); };
+
+  function ensureAudio() {
+    if (!state.audio) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      state.audio = new AC();
+      state.masterGain = state.audio.createGain();
+      state.masterGain.gain.value = 1;
+      state.masterGain.connect(state.audio.destination);
+      state.analyser = state.audio.createAnalyser();
+      state.analyser.fftSize = 2048;
+      state.masterGain.connect(state.analyser);
+    }
+    if (state.audio.state === 'suspended') state.audio.resume();
+  }
+  function stopTone() {
+    if (state.osc) {
+      try {
+        const now = state.audio.currentTime;
+        state.toneGain.gain.cancelScheduledValues(now);
+        state.toneGain.gain.setValueAtTime(state.toneGain.gain.value, now);
+        state.toneGain.gain.linearRampToValueAtTime(0, now + 0.04);
+        state.osc.stop(now + 0.06);
+      } catch (e) {}
+      state.osc = null; state.toneGain = null;
+    }
+  }
+  function playTone(freq, durationS = 3.0, pan = 0, peakGain = null) {
+    ensureAudio(); stopTone();
+    const ctx = state.audio;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const toneGain = ctx.createGain();
+    const target = peakGain != null ? peakGain : state.calibVolume;
+    toneGain.gain.setValueAtTime(0, now);
+    toneGain.gain.linearRampToValueAtTime(target, now + 0.04);
+    toneGain.gain.setValueAtTime(target, now + durationS - 0.04);
+    toneGain.gain.linearRampToValueAtTime(0, now + durationS);
+    if (pan !== 0 && ctx.createStereoPanner) {
+      const panner = ctx.createStereoPanner();
+      panner.pan.value = pan;
+      osc.connect(toneGain); toneGain.connect(panner); panner.connect(state.masterGain);
+    } else {
+      osc.connect(toneGain); toneGain.connect(state.masterGain);
+    }
+    osc.start(now); osc.stop(now + durationS + 0.1);
+    state.osc = osc; state.toneGain = toneGain;
+  }
+
+  const viz = $('viz'); const vizCtx = viz.getContext('2d'); let vizRaf = null;
+  function startViz() {
+    if (!state.analyser) return;
+    cancelAnimationFrame(vizRaf);
+    const buf = new Uint8Array(state.analyser.frequencyBinCount);
+    const draw = () => {
+      vizRaf = requestAnimationFrame(draw);
+      state.analyser.getByteTimeDomainData(buf);
+      const dpr = window.devicePixelRatio || 1;
+      const w = viz.width = viz.clientWidth * dpr;
+      const h = viz.height = viz.clientHeight * dpr;
+      vizCtx.clearRect(0, 0, w, h);
+      vizCtx.lineWidth = 2 * dpr;
+      const grad = vizCtx.createLinearGradient(0, 0, w, 0);
+      grad.addColorStop(0, '#7c5cff'); grad.addColorStop(1, '#19c2c6');
+      vizCtx.strokeStyle = grad;
+      vizCtx.beginPath();
+      const slice = w / buf.length;
+      for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128;
+        const y = h/2 + v * h * 0.45;
+        if (i === 0) vizCtx.moveTo(0, y); else vizCtx.lineTo(i * slice, y);
+      }
+      vizCtx.stroke();
+    };
+    draw();
+  }
+  function stopViz() { cancelAnimationFrame(vizRaf); vizCtx.clearRect(0, 0, viz.width, viz.height); }
+
+  function renderHistory() {
+    const raw = localStorage.getItem('hearing-tests');
+    const list = raw ? JSON.parse(raw) : [];
+    if (!list.length) return;
+    $('history-container').style.display = '';
+    const el = $('history-list'); el.innerHTML = '';
+    list.slice().reverse().slice(0, 6).forEach(r => {
+      const d = new Date(r.date);
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = '<span class="date">' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + '</span><span><strong>' + (r.maxFreq/1000).toFixed(1) + ' kHz</strong> <span style="color: var(--muted);">· ' + r.ageRange + '</span></span>';
+      el.appendChild(div);
+    });
+  }
+
+  $('btn-begin').addEventListener('click', () => { ensureAudio(); show('step-lr'); });
+
+  let lrExpected = null;
+  $('btn-play-lr').addEventListener('click', () => {
+    ensureAudio();
+    lrExpected = Math.random() < 0.5 ? 'left' : 'right';
+    playTone(1000, 1.2, lrExpected === 'left' ? -1 : 1, 0.12);
+    startViz(); setTimeout(stopViz, 1400);
+    $('lr-prompt').textContent = 'Which side did you hear the tone on?';
+    $('lr-answer').style.display = 'grid';
+  });
+  document.querySelectorAll('[data-lr]').forEach(b => b.addEventListener('click', (e) => {
+    const choice = e.currentTarget.dataset.lr;
+    if (!lrExpected) return;
+    if (choice === lrExpected) {
+      toast('Channels look right ✓');
+      setTimeout(() => show('step-calib'), 600);
+    } else {
+      toast('Channels swapped — flip your headphones around.');
+    }
+    $('lr-answer').style.display = 'none';
+    $('lr-prompt').textContent = '';
+  }));
+  $('btn-lr-back').addEventListener('click', () => show('step-intro'));
+  $('btn-lr-skip').addEventListener('click', () => show('step-calib'));
+
+  let calibOsc = null;
+  $('btn-calib-play').addEventListener('click', () => {
+    ensureAudio();
+    if (calibOsc) { try { calibOsc.stop(); } catch(e) {} calibOsc = null; $('btn-calib-play').textContent = '▶ Play 1 kHz reference'; stopViz(); return; }
+    const ctx = state.audio;
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = 1000;
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(state.calibVolume, ctx.currentTime + 0.05);
+    o.connect(g).connect(state.masterGain);
+    o.start();
+    calibOsc = o;
+    $('btn-calib-play').textContent = '■ Stop';
+    startViz();
+  });
+  $('btn-calib-back').addEventListener('click', () => { if (calibOsc) { try { calibOsc.stop(); } catch(e) {} calibOsc = null; } stopViz(); show('step-lr'); });
+  $('btn-calib-done').addEventListener('click', () => { if (calibOsc) { try { calibOsc.stop(); } catch(e) {} calibOsc = null; } stopViz(); beginTest(); });
+
+  function beginTest() { state.currentIdx = 0; state.answers = []; state.started = Date.now(); show('step-test'); presentTone(); }
+  function presentTone() {
+    const f = FREQS[state.currentIdx];
+    $('freq-num').textContent = f >= 1000 ? (f/1000).toFixed(f%1000===0 ? 0 : 1) : f;
+    $('freq-unit').textContent = f >= 1000 ? 'kHz' : 'Hz';
+    $('freq-sub').textContent = 'A 3-second sine tone is playing in both ears.';
+    const pct = Math.round((state.currentIdx / FREQS.length) * 100);
+    $('progress-fill').style.width = pct + '%';
+    $('progress-pct').textContent = pct + '%';
+    $('progress-text').textContent = 'Tone ' + (state.currentIdx + 1) + ' of ' + FREQS.length;
+    playTone(f, 3.0, 0, gainForFreq(f));
+    startViz(); setTimeout(stopViz, 3200);
+  }
+  function gainForFreq(f) {
+    const base = state.calibVolume;
+    if (f < 250) return base * 1.4;
+    if (f < 500) return base * 1.15;
+    if (f < 4000) return base;
+    if (f < 8000) return base * 1.05;
+    if (f < 14000) return base * 1.15;
+    return base * 1.3;
+  }
+  function recordAnswer(heard) {
+    state.answers.push({ freq: FREQS[state.currentIdx], heard });
+    stopTone();
+    state.currentIdx++;
+    if (state.currentIdx >= FREQS.length) { state.finished = Date.now(); showResults(); }
+    else presentTone();
+  }
+  $('btn-yes').addEventListener('click', () => recordAnswer(true));
+  $('btn-no').addEventListener('click', () => recordAnswer(false));
+  $('btn-replay').addEventListener('click', () => { const f = FREQS[state.currentIdx]; playTone(f, 3.0, 0, gainForFreq(f)); startViz(); setTimeout(stopViz, 3200); });
+  $('btn-quit').addEventListener('click', () => { if (confirm('Quit the test? Your progress will be lost.')) { stopTone(); stopViz(); show('step-intro'); } });
+
+  function showResults() {
+    const heardFreqs = state.answers.filter(a => a.heard).map(a => a.freq);
+    const maxF = heardFreqs.length ? Math.max(...heardFreqs) : 0;
+    $('max-freq').textContent = (maxF / 1000).toFixed(1);
+    const { ageRange, ageSub } = ageBandFromMax(maxF);
+    $('age-range').textContent = ageRange;
+    $('age-sub').textContent = ageSub;
+    renderAudiogram(); renderStats(maxF); renderInterpretation(maxF);
+    show('step-results');
+  }
+  function ageBandFromMax(f) {
+    if (f >= 19000) return { ageRange: 'Under 20 — exceptional', ageSub: 'Hearing above 19 kHz is rare past adolescence.' };
+    if (f >= 17000) return { ageRange: 'Roughly 18–25 years', ageSub: 'Strong high-frequency hearing — typical of young adults.' };
+    if (f >= 15000) return { ageRange: 'Roughly 25–35 years', ageSub: 'Typical of healthy adult ears with no significant noise exposure.' };
+    if (f >= 13000) return { ageRange: 'Roughly 35–45 years', ageSub: 'Normal age-related loss of the very top of the spectrum.' };
+    if (f >= 11000) return { ageRange: 'Roughly 45–55 years', ageSub: 'Modest high-frequency loss — common at this age band.' };
+    if (f >= 9000)  return { ageRange: 'Roughly 55–65 years', ageSub: 'High-frequency loss is starting to affect consonant clarity.' };
+    if (f >= 7000)  return { ageRange: '65+ years — or noise exposure', ageSub: 'Significant high-frequency loss; speech intelligibility may suffer in noise.' };
+    if (f >= 4000)  return { ageRange: 'Substantial hearing loss', ageSub: 'You may not be hearing some consonants clearly. Consider an audiology screening.' };
+    return { ageRange: 'Severe loss or equipment issue', ageSub: 'Check your headphones and volume — if results persist, see an audiologist.' };
+  }
+  function renderAudiogram() {
+    const cvs = $('audiogram');
+    const dpr = window.devicePixelRatio || 1;
+    const W = cvs.width = cvs.clientWidth * dpr;
+    const H = cvs.height = cvs.clientHeight * dpr;
+    const ctx = cvs.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const w = W / dpr, h = H / dpr;
+    ctx.clearRect(0, 0, w, h);
+    const padL = 64, padR = 24, padT = 18, padB = 36;
+    const plotW = w - padL - padR; const plotH = h - padT - padB;
+    const fMin = 100, fMax = 22000;
+    const xLog = (f) => padL + (Math.log10(f) - Math.log10(fMin)) / (Math.log10(fMax) - Math.log10(fMin)) * plotW;
+    const yPos = (heard) => padT + (heard ? 0.25 : 0.75) * plotH;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillStyle = '#8a93a6';
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.lineWidth = 1;
+    const gridFreqs = [125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    gridFreqs.forEach(f => {
+      const x = xLog(f);
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+      const label = f >= 1000 ? (f/1000) + 'k' : '' + f;
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x, h - 12);
+    });
+    ctx.fillStyle = '#c8ceda';
+    ctx.font = '11.5px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Heard', padL - 10, padT + plotH * 0.25 + 4);
+    ctx.fillText('Missed', padL - 10, padT + plotH * 0.75 + 4);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8a93a6';
+    ctx.fillText('Frequency (Hz)', padL + plotW/2, h - 2);
+    const refs = [
+      { age: 20, color: 'rgba(124,92,255,0.4)', maxF: 20000 },
+      { age: 40, color: 'rgba(25,194,198,0.35)', maxF: 16000 },
+      { age: 60, color: 'rgba(245,158,11,0.35)', maxF: 11000 },
+    ];
+    refs.forEach(r => {
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(xLog(fMin), padT + plotH * 0.25);
+      ctx.lineTo(xLog(r.maxF), padT + plotH * 0.25);
+      ctx.lineTo(xLog(r.maxF), padT + plotH * 0.75);
+      ctx.lineTo(xLog(fMax), padT + plotH * 0.75);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = r.color.replace(/[\d.]+\)$/, '0.9)');
+      ctx.font = '10.5px Inter';
+      ctx.textAlign = 'left';
+      ctx.fillText('age ~' + r.age, xLog(r.maxF) + 4, padT + plotH * 0.25 - 4);
+    });
+    state.answers.forEach(a => {
+      const x = xLog(a.freq); const y = yPos(a.heard);
+      ctx.beginPath();
+      ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+      ctx.fillStyle = a.heard ? '#22c55e' : '#ef4444';
+      ctx.shadowColor = a.heard ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)';
+      ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
+    });
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    state.answers.forEach((a, i) => {
+      const x = xLog(a.freq); const y = yPos(a.heard);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+  function renderStats(maxF) {
+    const heardCount = state.answers.filter(a => a.heard).length;
+    const totalCount = state.answers.length;
+    const lowestMissed = state.answers.find(a => !a.heard);
+    const grid = $('stat-grid'); grid.innerHTML = '';
+    const items = [
+      { k: 'Frequencies heard', v: heardCount + ' / ' + totalCount },
+      { k: 'Highest heard', v: maxF >= 1000 ? (maxF/1000).toFixed(1) + ' kHz' : maxF + ' Hz' },
+      { k: 'First miss', v: lowestMissed ? (lowestMissed.freq >= 1000 ? (lowestMissed.freq/1000).toFixed(1) + ' kHz' : lowestMissed.freq + ' Hz') : '—' },
+      { k: 'Test duration', v: Math.round((state.finished - state.started)/1000) + 's' },
+    ];
+    items.forEach(i => {
+      const div = document.createElement('div');
+      div.className = 'stat';
+      div.innerHTML = '<div class="k">' + i.k + '</div><div class="v">' + i.v + '</div>';
+      grid.appendChild(div);
+    });
+  }
+  function renderInterpretation(maxF) {
+    const wrap = $('interpretation'); wrap.innerHTML = '<h3>What this means</h3>';
+    const lowMisses = state.answers.filter(a => a.freq < 500 && !a.heard);
+    if (lowMisses.length) {
+      const n = document.createElement('div'); n.className = 'note warn';
+      n.innerHTML = '<strong>Low-frequency tones were missed.</strong> Built-in laptop speakers and many cheap earbuds cannot reproduce frequencies below ~200 Hz. This is almost certainly equipment, not hearing. Retake with quality headphones if you want a clean read.';
+      wrap.appendChild(n);
+    }
+    const heardAt2k = state.answers.find(a => a.freq === 2000)?.heard;
+    const heardAt4k = state.answers.find(a => a.freq === 4000)?.heard;
+    const heardAt8k = state.answers.find(a => a.freq === 8000)?.heard;
+    if (heardAt2k === true && heardAt4k === false && heardAt8k === true) {
+      const n = document.createElement('div'); n.className = 'note warn';
+      n.innerHTML = '<strong>You missed 4 kHz but heard the neighbors.</strong> A specific dip at 3–6 kHz is the signature of noise-induced hearing loss — concerts, power tools, gunfire, headphones cranked too high. The dip rarely recovers, so it is a useful flag if it shows up here.';
+      wrap.appendChild(n);
+    }
+    let n = document.createElement('div'); n.className = 'note';
+    if (maxF >= 17000) n.innerHTML = '<strong>Your top end is intact.</strong> Hearing tones above 17 kHz means your high-frequency cilia haven’t suffered the typical age-related loss yet. This range is musically subtle (it carries cymbal sheen and consonant detail), but losing it is one of the earliest signs of presbycusis.';
+    else if (maxF >= 13000) n.innerHTML = '<strong>Normal adult range.</strong> Most adults stop hearing above 13–17 kHz by their thirties. Your hearing for speech (250 Hz – 8 kHz) is what matters most for daily life, and it is fine.';
+    else if (maxF >= 8000) n.innerHTML = '<strong>Moderate high-frequency rolloff.</strong> You are missing the highest octave of human hearing. You would notice this when a cymbal sounds dull or when you cannot quite catch the difference between "f" and "s" in a noisy room. Often this is age, sometimes noise exposure.';
+    else n.innerHTML = '<strong>Significant loss in the speech range.</strong> Missing tones below 8 kHz can affect speech intelligibility, especially in noisy environments. If you did not have a clear equipment issue (like laptop speakers), this is worth raising with an audiologist.';
+    wrap.appendChild(n);
+    if (maxF >= 17000) {
+      const n2 = document.createElement('div'); n2.className = 'note';
+      n2.innerHTML = '<em>Fun fact:</em> 17 kHz is the "mosquito tone" used by some shops to deter loitering teenagers — it is audible to most under-25s and inaudible to most over-30s. You can hear it.';
+      wrap.appendChild(n2);
+    }
+  }
+
+  $('btn-save').addEventListener('click', () => {
+    const heardFreqs = state.answers.filter(a => a.heard).map(a => a.freq);
+    const maxF = heardFreqs.length ? Math.max(...heardFreqs) : 0;
+    const result = { date: new Date().toISOString(), answers: state.answers, maxFreq: maxF, ageRange: ageBandFromMax(maxF).ageRange };
+    const raw = localStorage.getItem('hearing-tests');
+    const list = raw ? JSON.parse(raw) : [];
+    list.push(result);
+    localStorage.setItem('hearing-tests', JSON.stringify(list));
+    toast('Saved to this browser.');
+  });
+  $('btn-share').addEventListener('click', () => {
+    const bits = state.answers.map(a => a.heard ? '1' : '0').join('');
+    const url = location.origin + location.pathname + '?r=' + bits;
+    navigator.clipboard.writeText(url).then(() => toast('Link copied — paste anywhere to share.')).catch(() => prompt('Copy this link:', url));
+  });
+  $('btn-retake').addEventListener('click', () => show('step-intro'));
+
+  function maybeLoadShared() {
+    const params = new URLSearchParams(location.search);
+    const r = params.get('r');
+    if (!r || r.length !== FREQS.length) return;
+    state.answers = FREQS.map((f, i) => ({ freq: f, heard: r[i] === '1' }));
+    state.started = Date.now(); state.finished = state.started;
+    showResults();
+  }
+
+  renderHistory();
+  maybeLoadShared();
+  window.addEventListener('beforeunload', stopTone);
+})();
+</script>
+
+</body>
+</html>
