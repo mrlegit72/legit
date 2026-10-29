@@ -19,15 +19,15 @@ class Http:
         self.min_interval_s = min_interval_s
         self._last = {}
 
-    def get(self, url: str, host_interval: Optional[float] = None, body=None):
+    def get(self, url: str, host_interval: Optional[float] = None, body=None, headers=None):
         host = url.split("/")[2]
         gap = host_interval if host_interval is not None else self.min_interval_s
         wait = self._last.get(host, 0) + gap - time.time()
         if wait > 0:
             time.sleep(wait)
         data = json.dumps(body).encode() if body is not None else None
-        headers = dict(UA, **({"Content-Type": "application/json"} if data else {}))
-        req = urllib.request.Request(url, data=data, headers=headers)
+        hdrs = dict(UA, **({"Content-Type": "application/json"} if data else {}), **(headers or {}))
+        req = urllib.request.Request(url, data=data, headers=hdrs)
         for attempt in range(3):
             try:
                 with urllib.request.urlopen(req, timeout=20) as r:

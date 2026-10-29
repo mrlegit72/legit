@@ -146,21 +146,11 @@ class PaperBroker:
 
     def buy(self, p: Pair, usd: float):
         fill = p.price * (1 + self.slip)
-        return fill, usd / fill
+        return fill, usd / fill, usd
 
     def sell(self, pos: Position, price: float):
         fill = price * (1 - self.slip)
         return fill, pos.qty * fill
-
-
-class LiveBroker:
-    """Not implemented on purpose. Live trading needs a funded hot wallet,
-    a Jupiter swap integration and a review of real fills. Paper first."""
-
-    def __init__(self, *_a, **_k):
-        raise NotImplementedError(
-            "Live mode is not wired up. Run paper mode until the logs look clean, "
-            "then implement LiveBroker.buy/sell (e.g. Jupiter swap API) with the same interface.")
 
 
 class Executor:
@@ -176,12 +166,16 @@ class Executor:
         usd = self.cash * self.r.max_trade_pct / 100
         if usd <= 0 or p.price <= 0:
             return False
-        fill, qty = self.broker.buy(p, usd)
-        # Stop is computed before the position exists; no order without it.
+        self.traded.add(p.mint)  # one shot per coin, even if the order fails
+        res = self.broker.buy(p, usd)
+        if not res:
+            self.log.failed("buy", p, usd)
+            return False
+        fill, qty, spent = res
+        # Stop is set from the real fill before the position is tracked.
         stop = self.risk.initial_stop(fill)
-        self.cash -= usd
-        self.traded.add(p.mint)
-        pos = Position(p.mint, p.symbol, p.pair_address, fill, qty, usd, score,
+        self.cash -= spent
+        pos = Position(p.mint, p.symbol, p.pair_address, fill, qty, spent, score,
                        stop, fill, False, now)
         self.positions[p.mint] = pos
         self.log.entry(pos, breakdown)
@@ -193,7 +187,11 @@ class Executor:
             return
         reason = self.risk.update(pos, price)
         if reason:
-            fill, proceeds = self.broker.sell(pos, price)
+            res = self.broker.sell(pos, price)
+            if not res:
+                self.log.failed("sell", pos, pos.cost)
+                return  # still open; the stop says exit again on the next check
+            fill, proceeds = res
             self.cash += proceeds
             del self.positions[mint]
             self.log.exit(pos, fill, proceeds, reason, now)
@@ -228,6 +226,10 @@ class Logger:
         label = KILL_RULES.get(rule, rule)
         self._write("kills.jsonl", {"mint": p.mint, "symbol": p.symbol, "rule": rule,
                                     "rule_text": label, "detail": detail})
+
+    def failed(self, side: str, coin, usd: float):
+        self._write("trades.jsonl", {"event": f"{side}_failed", "mint": coin.mint,
+                                     "symbol": coin.symbol, "size_usd": round(usd, 2)})
 
     def entry(self, pos: Position, breakdown: dict):
         self._write("trades.jsonl", {"event": "entry", "mint": pos.mint, "symbol": pos.symbol,

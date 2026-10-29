@@ -166,6 +166,51 @@ class DeskTest(unittest.TestCase):
         self.assertIn("Balance: $1,000.00 -> $1,000.00", d.recap())
 
 
+class FlakyBroker(PaperBroker):
+    def __init__(self):
+        super().__init__(0)
+        self.sell_ok = False
+
+    def sell(self, pos, price):
+        return super().sell(pos, price) if self.sell_ok else None
+
+
+class SafetyTest(DeskTest):
+    def test_failed_sell_keeps_position_and_retries(self):
+        pairs = {"GOOD": pair(mint="GOOD")}
+        secs = {"GOOD": clean_sec()}
+        d = Desk(FakeMarket(pairs, secs), self.logger, FlakyBroker(),
+                 1000.0, Runtime(), clock=lambda: self.t[0])
+        d.scan(); secs["GOOD"] = clean_sec(holders=1080); self.t[0] += 360; d.scan()
+        pairs["GOOD"] = replace(pairs["GOOD"], price=0.9)
+        d.manage()
+        self.assertIn("GOOD", d.ex.positions)
+        self.assertEqual(self.read("trades.jsonl")[-1]["event"], "sell_failed")
+        d.ex.broker.sell_ok = True
+        d.manage()
+        self.assertNotIn("GOOD", d.ex.positions)
+
+    def test_state_round_trip(self):
+        pairs = {"GOOD": pair(mint="GOOD")}
+        secs = {"GOOD": clean_sec()}
+        d = self.desk(FakeMarket(pairs, secs))
+        d.scan(); secs["GOOD"] = clean_sec(holders=1080); self.t[0] += 360; d.scan()
+        path = os.path.join(self.tmp, "state.json")
+        d.save(path)
+        d2 = self.desk(FakeMarket(pairs, {"GOOD": clean_sec()}))
+        self.assertTrue(d2.load(path))
+        self.assertEqual(d2.ex.positions["GOOD"].stop, d.ex.positions["GOOD"].stop)
+        self.assertAlmostEqual(d2.ex.cash, 920.0)
+        d2.scan()  # already traded: no second entry after a restart
+        self.assertEqual(len(d2.ex.positions), 1)
+
+    def test_live_needs_confirmation(self):
+        from desk.desk import main
+        with self.assertRaises(SystemExit) as cm:
+            main(["--mode", "live", "--logs", self.tmp])
+        self.assertIn("--confirm-live", str(cm.exception))
+
+
 class RugCheckParseTest(unittest.TestCase):
     def test_parse_excludes_amm_and_handles_missing(self):
         r = {"mintAuthority": None, "freezeAuthority": None,

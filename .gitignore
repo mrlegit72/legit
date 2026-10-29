@@ -1,3 +1,5 @@
 __pycache__/
 desk_logs/
 smart_wallets.txt
+*keypair*.json
+id.json

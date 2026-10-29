@@ -1,10 +1,13 @@
 """Main loop: SCOUT -> FILTER -> ANALYST -> EXECUTOR -> RISK, LOGGER watching all."""
 import argparse
 import datetime as dt
+import json
+import os
 import signal
 import time
+from dataclasses import asdict
 
-from .agents import Analyst, Executor, Filter, LiveBroker, Logger, PaperBroker, Risk, Scout
+from .agents import Analyst, Executor, Filter, Logger, PaperBroker, Position, Risk, Scout
 from .config import Runtime
 from .data import DexScreener, GeckoTerminal, Http, RugCheck, SmartWallets, TrenchBot
 
@@ -112,6 +115,26 @@ class Desk:
     def recap(self) -> str:
         return self.log.recap(self.start_balance, self.ex, self.prices)
 
+    # State survives a crash or restart, so open positions are never orphaned.
+    def save(self, path: str):
+        state = {"cash": self.ex.cash, "start_balance": self.start_balance,
+                 "traded": sorted(self.ex.traded), "dead": sorted(self.dead),
+                 "positions": [asdict(p) for p in self.ex.positions.values()]}
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(state, f)
+        os.replace(tmp, path)
+
+    def load(self, path: str) -> bool:
+        if not os.path.exists(path):
+            return False
+        with open(path) as f:
+            st = json.load(f)
+        self.ex.cash, self.start_balance = st["cash"], st["start_balance"]
+        self.ex.traded, self.dead = set(st["traded"]), set(st["dead"])
+        self.ex.positions = {p["mint"]: Position(**p) for p in st["positions"]}
+        return True
+
 
 def _deadline(args) -> float:
     if args.until:
@@ -127,35 +150,65 @@ def _deadline(args) -> float:
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Solana memecoin desk")
     ap.add_argument("--mode", choices=["paper", "live"], default="paper")
-    ap.add_argument("--balance", type=float, default=1000.0, help="starting paper balance, USD")
+    ap.add_argument("--balance", type=float, default=1000.0,
+                    help="starting paper balance, USD (live uses the wallet's USDC)")
     ap.add_argument("--hours", type=float, default=8.0)
-    ap.add_argument("--until", help="local HH:MM to stop and write the recap, e.g. 07:00")
-    ap.add_argument("--logs", default="desk_logs")
+    ap.add_argument("--until", help="local HH:MM to stop buying and write the recap, e.g. 07:00")
+    ap.add_argument("--logs", default=None, help="default desk_logs/<mode>")
     ap.add_argument("--smart-wallets", default="smart_wallets.txt")
+    ap.add_argument("--confirm-live", action="store_true",
+                    help="required with --mode live: this trades real money")
     args = ap.parse_args(argv)
 
     rt = Runtime()
-    broker = PaperBroker(rt.paper_slippage_pct) if args.mode == "paper" else LiveBroker()
-    logger = Logger(args.logs, args.mode)
-    desk = Desk(LiveMarket(args.smart_wallets), logger, broker, args.balance, rt)
+    log_dir = args.logs or os.path.join("desk_logs", args.mode)
+    if args.mode == "live":
+        if not args.confirm_live:
+            raise SystemExit("--mode live trades real money. Add --confirm-live if you mean it.")
+        from .live import LiveBroker
+        broker = LiveBroker()
+        info = broker.preflight()
+        print(f"[live] wallet {info['wallet']}  USDC ${info['usdc']:,.2f}  SOL {info['sol']:.4f}")
+        balance = info["usdc"]
+    else:
+        broker, balance = PaperBroker(rt.paper_slippage_pct), args.balance
+
+    logger = Logger(log_dir, args.mode)
+    desk = Desk(LiveMarket(args.smart_wallets), logger, broker, balance, rt)
+    state_path = os.path.join(log_dir, "state.json")
+    if desk.load(state_path):
+        if args.mode == "live":
+            desk.ex.cash = balance  # the wallet is the truth, not the saved number
+        print(f"[desk] resumed: {len(desk.ex.positions)} open positions, cash ${desk.ex.cash:,.2f}")
     end = _deadline(args)
     stop = {"now": False}
     signal.signal(signal.SIGINT, lambda *_: stop.update(now=True))
     signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
 
-    next_scan = 0.0
-    while time.time() < end and not stop["now"]:
+    def tick(scanning: bool, next_scan: float) -> float:
         try:
-            if time.time() >= next_scan:
+            if scanning and time.time() >= next_scan:
                 desk.scan()
                 next_scan = time.time() + rt.scan_every_s
             desk.manage()
+            desk.save(state_path)
         except Exception as e:  # a bad API response must not kill the night
             print(f"[warn] cycle error: {e!r}")
         time.sleep(rt.position_poll_s)
+        return next_scan
 
-    # Open positions are left to their stops; the recap marks them at last price.
+    next_scan = 0.0
+    while time.time() < end and not stop["now"]:
+        next_scan = tick(True, next_scan)
     print(desk.recap())
+
+    # No new buys after the deadline, but open positions keep their stops
+    # until the stop or trail says exit. Ctrl-C leaves them in state.json.
+    if desk.ex.positions and not stop["now"]:
+        print(f"[desk] no new entries; watching {len(desk.ex.positions)} open positions to exit")
+        while desk.ex.positions and not stop["now"]:
+            tick(False, 0)
+        print(desk.recap())
 
 
 if __name__ == "__main__":
