@@ -35,6 +35,7 @@ export default async function DashboardLayout({
         email: user.email,
         image: user.image,
         balance: user.wallet?.balance ?? 0,
+        isAdmin: user.role === 'admin',
       }}
       unreadNotifications={notifications}
     >

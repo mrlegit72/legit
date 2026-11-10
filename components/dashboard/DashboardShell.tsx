@@ -16,6 +16,7 @@ import {
   Bell,
   Menu,
   X,
+  ShieldCheck,
 } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { cn, formatUSDT, initials } from '@/lib/utils'
@@ -42,7 +43,14 @@ export function DashboardShell({
   unreadNotifications,
 }: {
   children: React.ReactNode
-  user: { id: string; name: string; email: string; image: string | null; balance: number }
+  user: {
+    id: string
+    name: string
+    email: string
+    image: string | null
+    balance: number
+    isAdmin?: boolean
+  }
   unreadNotifications: Notification[]
 }) {
   const pathname = usePathname()
@@ -79,7 +87,15 @@ export function DashboardShell({
             )
           })}
         </nav>
-        <div className="p-3 border-t border-ink-700">
+        <div className="p-3 border-t border-ink-700 space-y-1">
+          {user.isAdmin && (
+            <Link
+              href="/admin"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gold border border-gold/30 bg-gold/10 hover:bg-gold/20 transition"
+            >
+              <ShieldCheck size={18} /> Admin panel
+            </Link>
+          )}
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
             className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-ink-300 hover:text-red-400 hover:bg-ink-800 transition"

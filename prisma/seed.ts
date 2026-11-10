@@ -14,11 +14,17 @@ async function main() {
   await prisma.groupMember.deleteMany()
   await prisma.group.deleteMany()
   await prisma.wallet.deleteMany()
+  await prisma.auditLog.deleteMany()
+  await prisma.amlFlag.deleteMany()
+  await prisma.withdrawalRequest.deleteMany()
   await prisma.user.deleteMany()
+  await prisma.providerConfig.deleteMany()
+  await prisma.countryConfig.deleteMany()
+  await prisma.setting.deleteMany()
 
   const password = await bcrypt.hash('password123', 10)
 
-  // Users
+  // Users — adaeze is the seeded platform admin.
   const adaeze = await prisma.user.create({
     data: {
       name: 'Adaeze Okafor',
@@ -27,6 +33,8 @@ async function main() {
       country: 'Nigeria',
       password,
       image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Adaeze',
+      role: 'admin',
+      kycStatus: 'verified',
       wallet: { create: { balance: 450 } },
     },
   })
@@ -258,8 +266,95 @@ async function main() {
     })
   }
 
+  // Pending withdrawal requests for the admin queue
+  await prisma.withdrawalRequest.create({
+    data: {
+      userId: kwame.id,
+      amount: 500,
+      currency: 'USDT',
+      bankName: 'GCB Bank',
+      accountNumber: '1230998877',
+      accountName: 'Kwame Mensah',
+      status: 'pending',
+    },
+  })
+  await prisma.withdrawalRequest.create({
+    data: {
+      userId: chinedu.id,
+      amount: 60,
+      currency: 'USDT',
+      bankName: 'Access Bank',
+      accountNumber: '0099887766',
+      accountName: 'Chinedu Balogun',
+      status: 'pending',
+    },
+  })
+
+  // Sample AML flag on a user so the UI shows the pattern
+  await prisma.amlFlag.create({
+    data: {
+      userId: chinedu.id,
+      type: 'rapid_turnover',
+      severity: 'medium',
+      description: 'Deposit + withdrawal within 10 minutes, 3 times in 24h.',
+    },
+  })
+
+  // Provider configs — seed defaults so the admin UI shows all rows.
+  await prisma.providerConfig.createMany({
+    data: [
+      { providerId: 'bitnob', name: 'Bitnob', enabled: true, priority: 8 },
+      { providerId: 'transak', name: 'Transak', enabled: true, priority: 5 },
+      { providerId: 'coinbase', name: 'Coinbase Commerce', enabled: true, priority: 6 },
+      { providerId: 'demo', name: 'AjoVault Demo Rail', enabled: true, priority: 1 },
+    ],
+  })
+
+  // Country configs — all 12 enabled at launch.
+  const iso: [string, number][] = [
+    ['NG', 0.5], ['GH', 0.5], ['KE', 0.5], ['ZA', 0.5],
+    ['PH', 0.5], ['IN', 0.7], ['ID', 0.7], ['MX', 0.6],
+    ['BR', 0.6], ['US', 0.3], ['GB', 0.3], ['EU', 0.3],
+  ]
+  for (const [code, fee] of iso) {
+    await prisma.countryConfig.create({
+      data: { countryCode: code, enabled: true, platformFeePct: fee },
+    })
+  }
+
+  // Platform settings
+  await prisma.setting.createMany({
+    data: [
+      { key: 'platform.feePct', value: '0.5' },
+      { key: 'groups.minMembers', value: '5' },
+      { key: 'groups.maxMembers', value: '50' },
+      { key: 'groups.minContributionUsdt', value: '1' },
+      { key: 'groups.maxContributionUsdt', value: '10000' },
+      { key: 'groups.frequencies', value: 'weekly,monthly' },
+      { key: 'groups.defaultRotation', value: 'rotation' },
+      { key: 'disputes.escalationWindowHours', value: '24' },
+      { key: 'withdrawals.manualReviewThresholdUsdt', value: '500' },
+      { key: 'features.multiAdminGroups', value: 'off' },
+      { key: 'features.inAppChat', value: 'off' },
+      { key: 'features.smartContractEscrow', value: 'off' },
+      { key: 'sms.senderId', value: 'AJOVAULT' },
+      { key: 'email.fromAddress', value: 'alerts@ajovault.com' },
+    ],
+  })
+
+  // Audit seed — show something in the log on first load
+  await prisma.auditLog.create({
+    data: {
+      actorId: adaeze.id,
+      action: 'platform.bootstrap',
+      target: 'platform',
+      details: JSON.stringify({ seededProviders: 4, seededCountries: iso.length }),
+    },
+  })
+
   console.log('✅ Seeded successfully')
-  console.log('Demo login: adaeze@demo.com / password123')
+  console.log('Admin login: adaeze@demo.com / password123')
+  console.log('User login: kwame@demo.com / password123')
 }
 
 main()

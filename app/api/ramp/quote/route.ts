@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
     }
 
-    const provider = pickProvider(country, currency)
+    const provider = await pickProvider(country, currency)
     const quote = await getBestQuote({ country, currency, amount })
 
     return NextResponse.json({

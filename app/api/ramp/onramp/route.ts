@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
     }
 
-    const provider = pickProvider(country, body.currency)
+    const provider = await pickProvider(country, body.currency)
     const result = await provider.createOnRamp({
       userId: user.id,
       userEmail: user.email,

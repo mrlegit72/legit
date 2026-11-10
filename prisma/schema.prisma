@@ -10,15 +10,19 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(cuid())
+  id            String               @id @default(cuid())
   name          String
-  email         String         @unique
+  email         String               @unique
   phone         String?
-  country       String         @default("Nigeria")
+  country       String               @default("Nigeria")
   password      String?
   image         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  role          String               @default("user") // user | admin
+  status        String               @default("active") // active | frozen
+  kycStatus     String               @default("unverified") // unverified | pending | verified | rejected
+  twoFAEnabled  Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   wallet        Wallet?
   groups        GroupMember[]
   transactions  Transaction[]
@@ -26,6 +30,9 @@ model User {
   charges       Charge[]
   accounts      Account[]
   sessions      Session[]
+  withdrawals   WithdrawalRequest[]
+  auditEntries  AuditLog[]           @relation("ActorAudit")
+  amlFlags      AmlFlag[]
 }
 
 model Wallet {
@@ -145,4 +152,84 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ───────────────────────────── Admin / config tables ─────────────────────────────
+
+/// Per-provider overrides managed from the admin dashboard.
+/// `apiKey` and `webhookSecret` are stored AES-256-GCM encrypted
+/// (encrypted at lib/crypto.ts). When present, they override process.env.
+model ProviderConfig {
+  id             String   @id @default(cuid())
+  providerId     String   @unique // e.g. "bitnob", "transak", "coinbase"
+  name           String
+  enabled        Boolean  @default(true)
+  apiKey         String? // encrypted
+  webhookSecret  String? // encrypted
+  feeOverridePct Float? // null = use provider's default spread
+  priority       Int      @default(5) // 1 (lowest) – 10 (highest); specialist > global in ties
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/// Per-country toggles + provider preference.
+model CountryConfig {
+  countryCode         String   @id // ISO-2, e.g. "NG"
+  enabled             Boolean  @default(true)
+  preferredProviderId String? // if set, router prefers this provider when it supports the country
+  platformFeePct      Float    @default(0.5) // AjoVault's cut on top of partner spread
+  updatedAt           DateTime @updatedAt
+}
+
+/// Human-reviewed withdrawal queue. Replaces the auto-pending Transaction row.
+model WithdrawalRequest {
+  id              String   @id @default(cuid())
+  userId          String
+  amount          Float
+  currency        String   @default("USDT")
+  bankName        String
+  accountNumber   String
+  accountName     String
+  status          String   @default("pending") // pending | approved | rejected | completed
+  rejectionReason String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  completedAt     DateTime?
+  payoutExternalId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Immutable append-only log of admin actions and material system events.
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String? // null = system
+  action      String // "provider.update" | "user.freeze" | "withdrawal.approve" | ...
+  target      String? // "provider:bitnob" | "user:cuid..." | "withdrawal:cuid..."
+  details     String? // JSON string with the diff / reason / etc.
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("ActorAudit", fields: [actorId], references: [id], onDelete: SetNull)
+}
+
+/// Generic key/value settings bag for platform-wide knobs.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// AML/suspicious-activity flags on users.
+model AmlFlag {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String // "large_deposit" | "rapid_turnover" | "name_mismatch" | "pattern"
+  severity    String // "low" | "medium" | "high"
+  description String
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

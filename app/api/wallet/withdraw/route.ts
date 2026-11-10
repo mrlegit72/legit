@@ -16,6 +16,9 @@ export async function POST(req: Request) {
     if (!user || !user.wallet) {
       return NextResponse.json({ error: 'No wallet' }, { status: 400 })
     }
+    if (user.status === 'frozen') {
+      return NextResponse.json({ error: 'Account frozen' }, { status: 403 })
+    }
 
     const { amount, bankName, accountNumber, accountName } = await req.json()
     const amt = Number(amount)
@@ -29,10 +32,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing bank details' }, { status: 400 })
     }
 
+    // Debit the wallet immediately (reserves the funds), create a review-queue
+    // entry, log the user-facing pending Transaction, and notify.
     await prisma.$transaction([
       prisma.wallet.update({
         where: { userId: user.id },
         data: { balance: { decrement: amt } },
+      }),
+      prisma.withdrawalRequest.create({
+        data: {
+          userId: user.id,
+          amount: amt,
+          currency: 'USDT',
+          bankName,
+          accountNumber,
+          accountName,
+          status: 'pending',
+        },
       }),
       prisma.transaction.create({
         data: {
@@ -48,7 +64,7 @@ export async function POST(req: Request) {
         data: {
           userId: user.id,
           title: 'Withdrawal submitted',
-          message: `${amt} USDT withdrawal is being processed. You'll receive Naira/Cedi within 10 minutes.`,
+          message: `${amt} USDT withdrawal is under review. You'll receive local currency once approved.`,
         },
       }),
     ])
