@@ -30,6 +30,7 @@ export default async function WalletPage() {
       balance={user.wallet?.balance ?? 0}
       transactions={txs}
       coinbaseConfigured={hasCoinbaseConfigured()}
+      userCountry={user.country}
     />
   )
 }

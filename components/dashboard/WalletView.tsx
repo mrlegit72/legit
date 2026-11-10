@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowDownToLine, ArrowUpToLine, Wallet, Info } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, Wallet, Info, Banknote, Bitcoin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatUSDT, formatDateTime } from '@/lib/utils'
 import { DepositModal } from '@/components/wallet/DepositModal'
+import { FiatDepositModal } from '@/components/wallet/FiatDepositModal'
 import { cn } from '@/lib/utils'
 
 type Tx = {
@@ -21,12 +22,15 @@ export function WalletView({
   balance,
   transactions,
   coinbaseConfigured,
+  userCountry,
 }: {
   balance: number
   transactions: Tx[]
   coinbaseConfigured: boolean
+  userCountry: string
 }) {
   const [depositOpen, setDepositOpen] = useState(false)
+  const [fiatOpen, setFiatOpen] = useState(false)
   const [withdrawForm, setWithdrawForm] = useState({
     bankName: '',
     accountNumber: '',
@@ -92,9 +96,12 @@ export function WalletView({
             </p>
             <p className="mt-1 text-sm text-ink-200">USDT</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setDepositOpen(true)} className="btn-gold">
-              <ArrowDownToLine size={16} /> Deposit USDT
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button onClick={() => setFiatOpen(true)} className="btn-gold">
+              <Banknote size={16} /> Deposit Local Currency
+            </button>
+            <button onClick={() => setDepositOpen(true)} className="btn-ghost">
+              <Bitcoin size={16} /> Deposit Crypto
             </button>
           </div>
         </div>
@@ -229,6 +236,11 @@ export function WalletView({
         open={depositOpen}
         onClose={() => setDepositOpen(false)}
         coinbaseConfigured={coinbaseConfigured}
+      />
+      <FiatDepositModal
+        open={fiatOpen}
+        onClose={() => setFiatOpen(false)}
+        userCountry={userCountry}
       />
     </div>
   )
