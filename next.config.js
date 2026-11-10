@@ -8,6 +8,13 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
   },
+  // Bundle the seeded SQLite file with every serverless function so cold-start
+  // bootstrap in lib/prisma.ts can copy it to /tmp.
+  experimental: {
+    outputFileTracingIncludes: {
+      '/**': ['./data/seed.db'],
+    },
+  },
 }
 
 module.exports = nextConfig
